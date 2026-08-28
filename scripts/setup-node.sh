@@ -39,7 +39,7 @@ N0Q_DIR="$(pwd)/n0q"
 
 # We assume it's in the same github account/organization. 
 # You can change this if the URL is different.
-N0Q_REPO="https://github.com/ekstrah/n0q.git" 
+N0Q_REPO="https://github.com/n0-computer/noq.git" 
 
 if [ ! -d "$N0Q_DIR" ]; then
     echo "Cloning n0q from $N0Q_REPO into $N0Q_DIR ..."
