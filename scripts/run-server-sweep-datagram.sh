@@ -5,6 +5,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source env.sh
 
+# Create logging directories
+mkdir -p logs/stdout
+mkdir -p logs/qlog
+
 echo "Starting N0Q Server Datagram Sweep..."
 
 for combo in "${SWEEP_COMBOS[@]}"; do
@@ -13,14 +17,18 @@ for combo in "${SWEEP_COMBOS[@]}"; do
     
     echo "==========================================="
     echo "Running Server (Datagram): Scheduler=$scheduler, CC=$cc"
+    echo "Logs saving to logs/stdout/server_datagram_${scheduler}_${cc}.log"
     echo "==========================================="
+    
+    export QLOGDIR="$(pwd)/logs/qlog"
     
     # Start the N0Q Server in Datagram mode in the background.
     cargo run --release --manifest-path ../n0q/Cargo.toml --bin n0q-server -- \
         --listen "$SERVER_CANONICAL_IP:$QUIC_PORT" \
         --multipath \
         --datagram \
-        --cc "$cc" &
+        --cc "$cc" \
+        > "logs/stdout/server_datagram_${scheduler}_${cc}.log" 2>&1 &
     SERVER_PID=$!
     
     # Let the server run for the designated window duration
@@ -31,4 +39,4 @@ for combo in "${SWEEP_COMBOS[@]}"; do
     wait $SERVER_PID 2>/dev/null || true
 done
 
-echo "Server datagram sweep completed!"
+echo "Server datagram sweep completed! Check the logs/ folder."

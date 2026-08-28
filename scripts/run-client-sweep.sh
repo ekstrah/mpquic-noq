@@ -5,11 +5,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source env.sh
 
+# Create logging directories
+mkdir -p logs/stdout
+mkdir -p logs/qlog
+
 # Give the server a moment to start up the very first time
 echo "Waiting ${SWEEP_CLIENT_DELAY_SEC}s for the first server to start..."
 sleep "$SWEEP_CLIENT_DELAY_SEC"
 
-echo "Starting N0Q Client Sweep..."
+echo "Starting N0Q Client Sweep (Stream)..."
 
 for combo in "${SWEEP_COMBOS[@]}"; do
     scheduler=$(echo $combo | awk '{print $1}')
@@ -17,11 +21,13 @@ for combo in "${SWEEP_COMBOS[@]}"; do
     
     echo "==========================================="
     echo "Running Client: Scheduler=$scheduler, CC=$cc"
+    echo "Logs saving to logs/stdout/client_${scheduler}_${cc}.log"
     echo "==========================================="
     
-    # Run the N0Q Client. We bind to all three client IPs so the multipath 
-    # QUIC implementation knows it can use all of them as separate paths.
-    # Adjust the manifest path/binary name based on where you clone n0q.
+    # Export QLOGDIR so compatible Rust QUIC crates automatically dump qlog JSONs here
+    export QLOGDIR="$(pwd)/logs/qlog"
+    
+    # Run the N0Q Client and save all terminal output to a log file
     cargo run --release --manifest-path ../n0q/Cargo.toml --bin n0q-client -- \
         --bind "$LINK_A_CLIENT_IP" \
         --bind "$LINK_B_CLIENT_IP" \
@@ -30,7 +36,8 @@ for combo in "${SWEEP_COMBOS[@]}"; do
         --scheduler "$scheduler" \
         --cc "$cc" \
         --duration "$SWEEP_CLIENT_DURATION_SEC" \
-        "https://$SERVER_CANONICAL_IP:$QUIC_PORT/video" || true
+        "https://$SERVER_CANONICAL_IP:$QUIC_PORT/video" \
+        > "logs/stdout/client_stream_${scheduler}_${cc}.log" 2>&1 || true
         
     # Calculate how much time remains in this slot so we stay synced with the server
     sleep_time=$(( SWEEP_WINDOW_SEC - SWEEP_CLIENT_DURATION_SEC ))
@@ -40,4 +47,4 @@ for combo in "${SWEEP_COMBOS[@]}"; do
     fi
 done
 
-echo "Client sweep completed!"
+echo "Client sweep completed! Check the logs/ folder."
