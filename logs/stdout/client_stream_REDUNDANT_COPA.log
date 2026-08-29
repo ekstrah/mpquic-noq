@@ -1,0 +1,14 @@
+[2m2026-08-29T17:50:50.449502Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Starting n0q-client with config: Opt { bind: [172.16.1.2, 172.16.2.2, 172.16.3.2], multipath: true, scheduler: "REDUNDANT", cc: "COPA", duration: 15, datagram: false, url: "https://10.99.0.1:4433/video" }
+[2m2026-08-29T17:50:50.449696Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Connecting to target server: 10.99.0.1:4433
+[2m2026-08-29T17:50:50.449729Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Enabling multipath (max 8 paths, scheduler: REDUNDANT)
+[2m2026-08-29T17:50:50.449731Z[0m [33m WARN[0m [2mn0q_client::common[0m[2m:[0m COPA is not natively built into n0q; falling back to BBR3
+[2m2026-08-29T17:50:50.449867Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Initiating connection to 10.99.0.1:4433
+[2m2026-08-29T17:50:50.510193Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Connection established successfully!
+[2m2026-08-29T17:50:50.510201Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Opening 3 multipath subflow paths...
+[2m2026-08-29T17:50:50.599571Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m [SUCCESS] Multipath subflow via 172.16.1.2 active (PathId: PathId(1))
+[2m2026-08-29T17:50:50.618047Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m [SUCCESS] Multipath subflow via 172.16.3.2 active (PathId: PathId(3))
+[2m2026-08-29T17:50:50.663687Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m [SUCCESS] Multipath subflow via 172.16.2.2 active (PathId: PathId(2))
+[2m2026-08-29T17:50:50.663729Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Multipath subflow initialization complete.
+[2m2026-08-29T17:50:50.663735Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Starting Stream download test for 15s...
+[2m2026-08-29T17:51:05.668918Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Stream transfer completed!
+Received 61652090 bytes in 15.01 seconds, 32.87 Mbps

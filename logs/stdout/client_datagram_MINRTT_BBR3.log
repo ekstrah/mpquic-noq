@@ -1,0 +1,13 @@
+[2m2026-08-29T18:14:40.335322Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Starting n0q-client with config: Opt { bind: [172.16.1.2, 172.16.2.2, 172.16.3.2], multipath: true, scheduler: "MINRTT", cc: "BBR3", duration: 15, datagram: true, url: "https://10.99.0.1:4433/video" }
+[2m2026-08-29T18:14:40.335450Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Connecting to target server: 10.99.0.1:4433
+[2m2026-08-29T18:14:40.335868Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Enabling multipath (max 8 paths, scheduler: MINRTT)
+[2m2026-08-29T18:14:40.336089Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Initiating connection to 10.99.0.1:4433
+[2m2026-08-29T18:14:40.395155Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Connection established successfully!
+[2m2026-08-29T18:14:40.395169Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Opening 3 multipath subflow paths...
+[2m2026-08-29T18:14:40.447768Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m [SUCCESS] Multipath subflow via 172.16.1.2 active (PathId: PathId(0))
+[2m2026-08-29T18:14:40.451965Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m [SUCCESS] Multipath subflow via 172.16.3.2 active (PathId: PathId(1))
+[2m2026-08-29T18:14:40.552003Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m [SUCCESS] Multipath subflow via 172.16.2.2 active (PathId: PathId(2))
+[2m2026-08-29T18:14:40.552029Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Multipath subflow initialization complete.
+[2m2026-08-29T18:14:40.552031Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Starting Datagram test for 15s...
+[2m2026-08-29T18:14:55.646709Z[0m [32m INFO[0m [2mn0q_client[0m[2m:[0m Datagram test completed!
+Sent 480 dgrams, Received 156 dgrams (187200 bytes) in 15.09 seconds, 0.10 Mbps

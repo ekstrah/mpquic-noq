@@ -1,0 +1,7 @@
+[2m2026-08-29T17:52:26.422704Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Starting n0q-server with config: Opt { listen: 10.99.0.1:4433, multipath: true, cc: "COPA", datagram: false }
+[2m2026-08-29T17:52:26.422887Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Enabling multipath (max 8 paths)
+[2m2026-08-29T17:52:26.422895Z[0m [33m WARN[0m [2mn0q_server::common[0m[2m:[0m COPA is not natively built into n0q; falling back to BBR3
+Error: failed to bind UDP socket to 10.99.0.1:4433
+
+Caused by:
+    Address already in use (os error 98)

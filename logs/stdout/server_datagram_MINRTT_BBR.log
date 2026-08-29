@@ -1,0 +1,15 @@
+[2m2026-08-29T18:14:10.016149Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Starting n0q-server with config: Opt { listen: 10.99.0.1:4433, multipath: true, cc: "BBR", datagram: true }
+[2m2026-08-29T18:14:10.018078Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Enabling multipath (max 8 paths)
+[2m2026-08-29T18:14:10.021264Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m n0q-server listening on 10.99.0.1:4433
+[2m2026-08-29T18:14:15.137684Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:40741
+[2m2026-08-29T18:14:40.408814Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:40433
+[2m2026-08-29T18:15:05.777269Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:38891
+[2m2026-08-29T18:15:31.131806Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:43628
+[2m2026-08-29T18:15:56.350715Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:36792
+[2m2026-08-29T18:16:21.648862Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:48639
+[2m2026-08-29T18:16:46.942649Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:49920
+[2m2026-08-29T18:17:12.315393Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:35674
+[2m2026-08-29T18:17:37.593578Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:38976
+[2m2026-08-29T18:18:02.906107Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:43269
+[2m2026-08-29T18:18:28.207161Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:58186
+[2m2026-08-29T18:18:53.520940Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Accepted new connection from remote: 172.16.1.2:34163

@@ -8,13 +8,13 @@
 # below.
 
 # --- assign these yourself, one file per box (see note at bottom) ---
-SERVER_IFACE_A=enxf8e43b965cdc   # SERVER NIC wired to CLIENT_IFACE_A (LEO link)
-SERVER_IFACE_B=enxf8e43b9eaa06   # SERVER NIC wired to CLIENT_IFACE_B (Mobile link)
-SERVER_IFACE_C=enx00e04c041621   # SERVER NIC wired to CLIENT_IFACE_C (Mesh link)
+SERVER_IFACE_A="${SERVER_IFACE_A:-enxf8e43b965cdc}"   # SERVER NIC wired to CLIENT_IFACE_A (LEO link)
+SERVER_IFACE_B="${SERVER_IFACE_B:-enxf8e43b9eaa06}"   # SERVER NIC wired to CLIENT_IFACE_B (Mobile link)
+SERVER_IFACE_C="${SERVER_IFACE_C:-enx00e04c041621}"   # SERVER NIC wired to CLIENT_IFACE_C (Mesh link)
 
-CLIENT_IFACE_A=enx00e04c680170   # CLIENT NIC wired to SERVER_IFACE_A (LEO link)
-CLIENT_IFACE_B=enxf8e43b9e8eee   # CLIENT NIC wired to SERVER_IFACE_B (Mobile link)
-CLIENT_IFACE_C=enxf8e43b9e8bfa   # CLIENT NIC wired to SERVER_IFACE_C (Mesh link)
+CLIENT_IFACE_A="${CLIENT_IFACE_A:-enx00e04c680170}"   # CLIENT NIC wired to SERVER_IFACE_A (LEO link)
+CLIENT_IFACE_B="${CLIENT_IFACE_B:-enxf8e43b9e8eee}"   # CLIENT NIC wired to SERVER_IFACE_B (Mobile link)
+CLIENT_IFACE_C="${CLIENT_IFACE_C:-enxf8e43b9e8bfa}"   # CLIENT NIC wired to SERVER_IFACE_C (Mesh link)
 
 # --- fixed addressing, do not change without updating both boxes ---
 LINK_A_SUBNET=172.16.1.0/30
