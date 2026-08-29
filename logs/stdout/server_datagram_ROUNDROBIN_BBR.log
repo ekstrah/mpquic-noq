@@ -1,6 +1,0 @@
-[2m2026-08-29T18:17:32.487055Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Starting n0q-server with config: Opt { listen: 10.99.0.1:4433, multipath: true, cc: "BBR", datagram: true }
-[2m2026-08-29T18:17:32.487370Z[0m [32m INFO[0m [2mn0q_server[0m[2m:[0m Enabling multipath (max 8 paths)
-Error: failed to bind UDP socket to 10.99.0.1:4433
-
-Caused by:
-    Address already in use (os error 98)
