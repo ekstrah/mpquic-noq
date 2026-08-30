@@ -73,17 +73,26 @@ CONFIG = {
             "loss_pct": 0.0,
         },
     },
+    # Scheduler collapsed to a single label: MINRTT/REDUNDANT/ROUNDROBIN were
+    # confirmed to run the exact same path-selection code (no scheduler is
+    # actually implemented in noq-proto - see TODO.md / docs/), so sweeping
+    # all three was tripling run count for zero additional information.
+    # Reinvesting that 3x budget into repeats/thresholds instead.
     "sweep_combos": [
         ("MINRTT", "BBR"),
         ("MINRTT", "CUBIC"),
         ("MINRTT", "NEWRENO"),
-        ("REDUNDANT", "BBR"),
-        ("REDUNDANT", "CUBIC"),
-        ("REDUNDANT", "NEWRENO"),
-        ("ROUNDROBIN", "BBR"),
-        ("ROUNDROBIN", "CUBIC"),
-        ("ROUNDROBIN", "NEWRENO"),
     ],
+    # RFC 9002 kPacketThreshold values to sweep. 3 is the spec default.
+    # Small first pass: 4 representative points (default, mid, high, and the
+    # BBR pt=25-40 ceiling/reversal region from the earlier full 3-40 sweep)
+    # rather than the full 8-point grid, to validate the repeat mechanism and
+    # the datagram harness fix before committing to a much longer run.
+    "sweep_packet_thresholds": [3, 10, 20, 40],
+    # Number of times to repeat each (scheduler, cc, packet_threshold) combo.
+    # Repeats are the outer-outer loop (before packet_threshold), so an
+    # interrupted run still yields whole completed repeat blocks.
+    "sweep_repeats": 2,
     "picoquic_cc_list": ["bbr", "cubic", "fast", "newreno"],
     "sweep_window_sec": 25,
     "sweep_client_delay_sec": 5,
@@ -280,7 +289,7 @@ def run_automated_sweep(client, server, mode="stream"):
 
     csv_file = os.path.join(logs_dir, f"sweep_{mode}_summary.csv")
     with open(csv_file, "w") as f:
-        f.write("scheduler,cc,a_rx_bytes,b_rx_bytes,c_rx_bytes,a_share_pct,b_share_pct,c_share_pct,total_rx_bytes,exit_code\n")
+        f.write("scheduler,cc,packet_threshold,repeat,a_rx_bytes,b_rx_bytes,c_rx_bytes,a_share_pct,b_share_pct,c_share_pct,total_rx_bytes,exit_code\n")
 
     info(f"\n*** Starting Automated N0Q Sweep (Mode: {mode.upper()}) ***\n")
     info(f"Summary CSV: {csv_file}\n")
@@ -320,19 +329,36 @@ def run_automated_sweep(client, server, mode="stream"):
     if not wait_for_port_free():
         warn(f"Port {port} still in use before sweep start; a stray process may not have been killed.\n")
 
-    for scheduler, cc in CONFIG["sweep_combos"]:
+    repeats = CONFIG["sweep_repeats"]
+    sweep_grid = [
+        (rep, scheduler, cc, pt)
+        for rep in range(1, repeats + 1)
+        for pt in CONFIG["sweep_packet_thresholds"]
+        for scheduler, cc in CONFIG["sweep_combos"]
+    ]
+    total_runs = len(sweep_grid)
+    est_min = total_runs * CONFIG["sweep_window_sec"] / 60.0
+    info(f"Sweep grid: {total_runs} runs "
+         f"({len(CONFIG['sweep_combos'])} combos x "
+         f"{len(CONFIG['sweep_packet_thresholds'])} packet thresholds x "
+         f"{repeats} repeats), ~{est_min:.0f} min\n\n")
+
+    for run_idx, (rep, scheduler, cc, packet_threshold) in enumerate(sweep_grid, start=1):
         info("============================================================\n")
-        info(f"Running Combo: Scheduler={scheduler}, CC={cc}\n")
+        info(f"[{run_idx}/{total_runs}] Scheduler={scheduler}, CC={cc}, "
+             f"packet_threshold={packet_threshold}, repeat={rep}/{repeats}\n")
         info("============================================================\n")
 
-        s_log = os.path.join(logs_stdout, f"server_{mode}_{scheduler}_{cc}.log")
-        c_log = os.path.join(logs_stdout, f"client_{mode}_{scheduler}_{cc}.log")
+        tag = f"{scheduler}_{cc}_pt{packet_threshold}_r{rep}"
+        s_log = os.path.join(logs_stdout, f"server_{mode}_{tag}.log")
+        c_log = os.path.join(logs_stdout, f"client_{mode}_{tag}.log")
 
         # Start Server in background
         if use_direct_bin:
             server_cmd = (
                 f"export QLOGDIR='{logs_qlog}'; "
                 f"{n0q_server_bin} --listen {canonical_ip}:{port} --multipath {datagram_flag} --cc {cc} "
+                f"--packet-threshold {packet_threshold} "
                 f"> '{s_log}' 2>&1 & echo $!"
             )
         else:
@@ -341,6 +367,7 @@ def run_automated_sweep(client, server, mode="stream"):
                 f"export QLOGDIR='{logs_qlog}'; "
                 f"cargo run --release --manifest-path {n0q_manifest} --bin n0q-server -- "
                 f"--listen {canonical_ip}:{port} --multipath {datagram_flag} --cc {cc} "
+                f"--packet-threshold {packet_threshold} "
                 f"> '{s_log}' 2>&1 & echo $!"
             )
         server_pid_out = server.cmd(f"bash -c \"{server_cmd}\"")
@@ -360,6 +387,7 @@ def run_automated_sweep(client, server, mode="stream"):
                 f"export QLOGDIR='{logs_qlog}'; "
                 f"{n0q_client_bin} --bind {bind_a} --bind {bind_b} --bind {bind_c} "
                 f"--multipath {datagram_flag} --scheduler {scheduler} --cc {cc} "
+                f"--packet-threshold {packet_threshold} "
                 f"--duration {CONFIG['sweep_client_duration_sec']} "
                 f"https://{canonical_ip}:{port}/video > '{c_log}' 2>&1"
             )
@@ -370,6 +398,7 @@ def run_automated_sweep(client, server, mode="stream"):
                 f"cargo run --release --manifest-path {n0q_manifest} --bin n0q-client -- "
                 f"--bind {bind_a} --bind {bind_b} --bind {bind_c} "
                 f"--multipath {datagram_flag} --scheduler {scheduler} --cc {cc} "
+                f"--packet-threshold {packet_threshold} "
                 f"--duration {CONFIG['sweep_client_duration_sec']} "
                 f"https://{canonical_ip}:{port}/video > '{c_log}' 2>&1"
             )
@@ -392,7 +421,7 @@ def run_automated_sweep(client, server, mode="stream"):
         pb = f"{(100.0 * db / total):.1f}" if total > 0 else "0.0"
         pc = f"{(100.0 * dc / total):.1f}" if total > 0 else "0.0"
 
-        row = f"{scheduler},{cc},{da},{db},{dc},{pa},{pb},{pc},{total},{exit_code}"
+        row = f"{scheduler},{cc},{packet_threshold},{rep},{da},{db},{dc},{pa},{pb},{pc},{total},{exit_code}"
         with open(csv_file, "a") as f:
             f.write(row + "\n")
 
@@ -408,7 +437,8 @@ def run_automated_sweep(client, server, mode="stream"):
         if not wait_for_port_free():
             warn(
                 f"Port {port} still in use after killing server (PID {server_pid}) "
-                f"for Scheduler={scheduler}, CC={cc}. Next combo's server may fail to bind.\n"
+                f"for Scheduler={scheduler}, CC={cc}, pt={packet_threshold}, rep={rep}. "
+                f"Next combo's server may fail to bind.\n"
             )
 
         rem_time = (
