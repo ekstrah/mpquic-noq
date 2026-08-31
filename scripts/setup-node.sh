@@ -39,7 +39,7 @@ N0Q_DIR="$(pwd)/n0q"
 
 # We assume it's in the same github account/organization. 
 # You can change this if the URL is different.
-N0Q_REPO="https://github.com/n0-computer/noq.git" 
+N0Q_REPO="https://github.com/ekstrah/n0q-fork"
 
 if [ ! -d "$N0Q_DIR" ]; then
     echo "Cloning n0q from $N0Q_REPO into $N0Q_DIR ..."
@@ -53,9 +53,13 @@ fi
 # 4. Build n0q
 echo "[4/4] Building n0q..."
 cd "$N0Q_DIR"
-# Force build the binaries that the sweep scripts use
-cargo build --release --bin n0q-client
-cargo build --release --bin n0q-server
+# Upstream n0-computer/noq does not have separate n0q-client/n0q-server
+# binaries or multipath scheduler support (that only existed in a custom
+# fork). Build the perf tool it does ship, which has `client`/`server`
+# subcommands for basic single-path QUIC testing:
+#   noq-perf server --listen [::]:4433
+#   noq-perf client <host:port>
+cargo build --release --bin noq-perf
 
 echo "============================================="
 echo " Setup complete! n0q is built and ready."
