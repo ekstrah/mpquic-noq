@@ -51,17 +51,12 @@ else
 fi
 
 # 4. Build n0q
-echo "[4/4] Building n0q..."
+echo "[4/4] Building n0q-server and n0q-client..."
 cd "$N0Q_DIR"
-# Upstream n0-computer/noq does not have separate n0q-client/n0q-server
-# binaries or multipath scheduler support (that only existed in a custom
-# fork). Build the perf tool it does ship, which has `client`/`server`
-# subcommands for basic single-path QUIC testing:
-#   noq-perf server --listen [::]:4433
-#   noq-perf client <host:port>
-cargo build --release --bin noq-perf
+cargo build --release --bin n0q-server --bin n0q-client
 
 echo "============================================="
 echo " Setup complete! n0q is built and ready."
 echo "============================================="
+echo "Binaries: $N0Q_DIR/target/release/n0q-server, n0q-client"
 echo "Don't forget to configure your network interfaces in env.sh"

@@ -75,17 +75,14 @@ CONFIG = {
     },
     "sweep_combos": [
         ("MINRTT", "BBR"),
-        ("MINRTT", "BBR3"),
         ("MINRTT", "CUBIC"),
-        ("MINRTT", "COPA"),
+        ("MINRTT", "NEWRENO"),
         ("REDUNDANT", "BBR"),
-        ("REDUNDANT", "BBR3"),
         ("REDUNDANT", "CUBIC"),
-        ("REDUNDANT", "COPA"),
+        ("REDUNDANT", "NEWRENO"),
         ("ROUNDROBIN", "BBR"),
-        ("ROUNDROBIN", "BBR3"),
         ("ROUNDROBIN", "CUBIC"),
-        ("ROUNDROBIN", "COPA"),
+        ("ROUNDROBIN", "NEWRENO"),
     ],
     "picoquic_cc_list": ["bbr", "cubic", "fast", "newreno"],
     "sweep_window_sec": 25,
@@ -304,6 +301,25 @@ def run_automated_sweep(client, server, mode="stream"):
     bind_b = CONFIG["links"]["B"]["client_ip_raw"]
     bind_c = CONFIG["links"]["C"]["client_ip_raw"]
 
+    def port_is_free():
+        out = server.cmd(f"ss -uln sport = :{port} 2>/dev/null").strip()
+        return "UNCONN" not in out
+
+    def wait_for_port_free(max_wait_sec=5.0, interval_sec=0.5):
+        waited = 0.0
+        while waited < max_wait_sec:
+            if port_is_free():
+                return True
+            time.sleep(interval_sec)
+            waited += interval_sec
+        return port_is_free()
+
+    # Guard against stale n0q-server processes left over from a previous
+    # (e.g. interrupted) run occupying the port before the sweep even starts.
+    server.cmd("pkill -9 -f n0q-server 2>/dev/null || true")
+    if not wait_for_port_free():
+        warn(f"Port {port} still in use before sweep start; a stray process may not have been killed.\n")
+
     for scheduler, cc in CONFIG["sweep_combos"]:
         info("============================================================\n")
         info(f"Running Combo: Scheduler={scheduler}, CC={cc}\n")
@@ -382,10 +398,18 @@ def run_automated_sweep(client, server, mode="stream"):
 
         info(f"Combo Result: Link A={pa}% ({da} B), Link B={pb}% ({db} B), Link C={pc}% ({dc} B) [Exit: {exit_code}]\n")
 
-        # Clean up Server for this combo
+        # Clean up Server for this combo. Kill by PID and by name, then
+        # actively verify the port was released -- a plain "kill" (SIGTERM)
+        # or a single pkill attempt is not guaranteed to have taken effect
+        # by the time the next combo tries to bind the same port.
         if server_pid:
-            server.cmd(f"kill {server_pid} 2>/dev/null || true")
-            server.cmd("pkill -9 -f n0q-server 2>/dev/null || true")
+            server.cmd(f"kill -9 {server_pid} 2>/dev/null || true")
+        server.cmd("pkill -9 -f n0q-server 2>/dev/null || true")
+        if not wait_for_port_free():
+            warn(
+                f"Port {port} still in use after killing server (PID {server_pid}) "
+                f"for Scheduler={scheduler}, CC={cc}. Next combo's server may fail to bind.\n"
+            )
 
         rem_time = (
             CONFIG["sweep_window_sec"]
