@@ -84,15 +84,18 @@ CONFIG = {
         ("MINRTT", "NEWRENO"),
     ],
     # RFC 9002 kPacketThreshold values to sweep. 3 is the spec default.
-    # Small first pass: 4 representative points (default, mid, high, and the
-    # BBR pt=25-40 ceiling/reversal region from the earlier full 3-40 sweep)
-    # rather than the full 8-point grid, to validate the repeat mechanism and
-    # the datagram harness fix before committing to a much longer run.
-    "sweep_packet_thresholds": [3, 10, 20, 40],
+    # Full 8-point grid, matching the stream-mode sweep that found BBR's
+    # pt=25-30 ceiling/reversal - the earlier 4-point [3,10,20,40] pass was
+    # just to validate the repeat mechanism and the datagram harness fix
+    # before committing to this larger run.
+    "sweep_packet_thresholds": [3, 5, 10, 15, 20, 25, 30, 40],
     # Number of times to repeat each (scheduler, cc, packet_threshold) combo.
     # Repeats are the outer-outer loop (before packet_threshold), so an
-    # interrupted run still yields whole completed repeat blocks.
-    "sweep_repeats": 2,
+    # interrupted run still yields whole completed repeat blocks. Bumped from
+    # 2 to 5 - the validation pass showed NewReno's small per-run packet
+    # counts (5-11k vs 60-136k for BBR/CUBIC) make n=2 too noisy for a real
+    # threshold trend.
+    "sweep_repeats": 5,
     "picoquic_cc_list": ["bbr", "cubic", "fast", "newreno"],
     "sweep_window_sec": 25,
     "sweep_client_delay_sec": 5,

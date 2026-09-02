@@ -412,3 +412,161 @@ TODO.md entry as proof the fix is still in the code — verify against the
 actual source before relying on or citing it, especially after anything
 that touched the workspace outside this conversation (like the unexplained
 `logs/` clearing earlier in this session).
+
+## [FIXED] Datagram-mode benchmark sent 0 dgrams in every run — root-caused (2026-09-01)
+
+**Symptom**: after the earlier `send_datagram()` → `send_datagram_wait()`
+harness fix (see the "Datagram-mode benchmark bug" entry above), a 24-run
+validation sweep (`mininet_topo.py --sweep datagram`, MINRTT-only,
+`packet_threshold` in `[3, 10, 20, 40]`, 2 repeats) came back with **every
+single run** printing `Sent 0 dgrams, Received 0 dgrams (0 bytes) ... 0.00
+Mbps`. That earlier fix didn't just fail to help — it broke the benchmark
+completely.
+
+### False lead: `SendDatagram::poll`'s retry loop
+
+First suspect was `noq/src/connection.rs:1164-1198` (`SendDatagram::poll`):
+its `Blocked` arm polls a `Notified` future in a loop and, on `Ready(())`,
+just resets to a fresh `notified()` future and loops — never explicitly
+re-invoking `.send()`. Read in isolation this looks like it discards every
+unblock signal forever. **Verified false** by building a standalone
+reproduction (`noq/tests/` scratch test, removed after use): forced 2000
+datagrams through a deliberately-saturated 1MB send buffer on a single
+path — completed in 30ms, no hang. Reason it's not a bug: `Future::poll` in
+Rust always restarts at the top of the function body on every fresh
+executor call (there's no "resume mid-loop" across separate `poll()`
+invocations), so when the wake fires and the task is re-polled, it's a
+brand-new top-level call that re-attempts the real `.send()` — the loop's
+"reset and re-poll notify" behavior is only handling the harmless
+spurious-immediate-readiness case *within* one call. **Lesson: reasoning
+about async retry-loop correctness from a single read is unreliable —
+build a minimal reproduction before trusting the analysis, even when the
+code looks suspicious.**
+
+### Real root cause: fixed 1200-byte payload vs. multipath's per-connection MTU floor
+
+Extended the same reproduction to multipath (3 subflows over loopback-aliased
+addresses, matching the real client's `open_path_ensure` setup) and it
+failed immediately with `SendDatagramError::TooLarge` — not `Blocked`.
+
+- `Connection::current_mtu()` (`noq-proto/src/connection/mod.rs:7022`)
+  computes the connection-wide usable MTU as the **minimum across all
+  active paths** when multipath is enabled (this is intentional and
+  documented — see IETF framing below).
+- RFC 9000 §14.1 ("Initial Datagram Size") requires every QUIC path —
+  including a freshly-opened multipath subflow — to start conservatively at
+  a 1200-byte payload floor (`INITIAL_MTU`, `noq-proto/src/lib.rs:357`) and
+  only grow it via DPLPMTUD (RFC 8899, referenced by RFC 9000 §14.3) probes
+  over subsequent RTTs.
+- The datagram benchmark (`apps/src/client.rs::run_datagram_test`) opens 3
+  fresh multipath subflows immediately before starting the 15s test, so at
+  the moment the first `send_datagram_wait()` call fires, at least one
+  subflow is still sitting at the 1200-byte floor — dragging
+  `current_mtu()` down with it.
+- `Datagrams::max_size()` (`noq-proto/src/connection/datagrams.rs:69`)
+  computes the usable datagram payload as
+  `current_mtu() - predict_1rtt_overhead_no_pn() - Datagram::SIZE_BOUND`.
+  `predict_1rtt_overhead_no_pn()` (`mod.rs:7057`) accounts for the QUIC
+  header + AEAD tag (~21-29 bytes depending on CID length);
+  `Datagram::SIZE_BOUND` (`noq-proto/src/frame.rs:2044`) is 9 bytes for the
+  DATAGRAM frame's own type+length prefix. At the 1200-byte floor, usable
+  size comes out to ~1162-1170 bytes — **always less than the benchmark's
+  hard-coded 1200-byte payload.**
+- Result: `send_datagram_wait()`'s very first call returns
+  `SendDatagramError::TooLarge`, every single time, deterministically,
+  regardless of CC or `packet_threshold` — explaining the uniform 0/0
+  across all 24 runs.
+- Compounding bug: `run_datagram_test`'s sender loop treated *any* error as
+  fatal (`Ok(Err(_)) => break`), aborting the entire 15s test after this one
+  transient, self-resolving-within-a-few-RTTs error, instead of retrying
+  once MTU discovery caught up.
+
+### IETF compliance framing
+
+- **RFC 9000 §14.1** mandates the conservative 1200-byte initial floor this
+  bug collided with — not a bug in n0q, expected protocol behavior.
+- **RFC 9000 §14.3 / RFC 8899 (DPLPMTUD)** — n0q's `MtuDiscovery`
+  (`noq-proto/src/connection/mtud.rs`) already implements this correctly;
+  the issue was purely that the benchmark queried MTU only once (implicitly,
+  by hard-coding 1200) instead of continuously.
+- **RFC 9221 §4** ("An Unreliable Datagram Extension to QUIC") requires a
+  sender not exceed `max_datagram_frame_size` or the current path's usable
+  size — `current_mtu()`'s "minimum across all active paths" choice for
+  multipath is the conservative, spec-correct interpretation (a datagram
+  sized for the smallest active path is guaranteed sendable regardless of
+  which path gets picked), so that logic was intentionally left unchanged.
+
+### Fix
+
+`apps/src/client.rs` (`run_datagram_test`, sender closure, lines ~244-289):
+query `conn.max_datagram_size()` every iteration and size each datagram to
+`TARGET_PAYLOAD_LEN.min(max_size)` instead of assuming a fixed 1200 bytes;
+treat `SendDatagramError::TooLarge` as transient (`continue`) instead of
+fatal. This is the spec-correct fix, not a workaround — RFC 9221 always
+intended the effective size limit to be dynamic (n0q's own
+`drop_oversized` already handles it shrinking again on an MTU black-hole
+event), so adapting to it rather than hard-coding the RFC 9000 floor is
+what the harness should have done from the start. `SendDatagram::poll` was
+left untouched — it isn't broken.
+
+**Verified**: local loopback client/server run (multipath + datagram +
+BBR) — 14,992 sent / 14,992 received, 46.42 Mbps, vs. 0/0 before.
+
+### Gotcha: `mininet_topo.py` prefers prebuilt binaries over `cargo run`
+
+First re-run of the sweep *after* the source fix still showed 0/0 — cost a
+full wasted 24-run cycle. Cause: `mininet_topo.py:270`
+(`use_direct_bin = os.path.isfile(n0q_server_bin) and
+os.path.isfile(n0q_client_bin)`) runs the prebuilt
+`target/release/n0q-{server,client}` binaries directly whenever they
+already exist, skipping `cargo run --release` (that's only a fallback path
+for a from-scratch checkout). Editing n0q source does **not** get picked up
+by the next sweep unless you rebuild first:
+```
+cargo build --release --bin n0q-server --bin n0q-client
+```
+**Lesson: after any n0q source change, rebuild release binaries explicitly
+before re-running a mininet sweep — don't assume the sweep script will
+notice.**
+
+### New methodology caveat found in the same investigation
+
+The benchmark's own printed `Sent N dgrams` line is **not** a reliable
+transmission metric. `send_datagram_wait()` completing only means the
+payload was accepted into the local outgoing queue
+(`noq-proto`'s `DatagramState::outgoing`,
+`noq-proto/src/connection/datagrams.rs:108`) — not that it hit the wire;
+actual transmission happens later, gated by the congestion window, when the
+packet-builder drains that queue. `conn.close()` at test end discards
+whatever's still queued. Since the benchmark deliberately offers load
+(~48 Mbps at 5000 dgrams/s × 1200B) faster than any CC sustains, this shows
+up as a sent-vs-received gap that scales inversely with achieved
+throughput:
+
+| CC | sent-vs-received gap (24-run validation sweep) |
+|---|---|
+| CUBIC | 2-11% |
+| BBR | 10-40% |
+| NewReno | 18-73% |
+
+The reported `Mbps` figure is **not** affected (computed purely from
+received bytes), but `Sent N dgrams` should never be cited as an
+attempted-transmission-rate or loss-denominator metric.
+
+### Datagram-mode results after the fix (24-run validation sweep, MINRTT-only, n=2)
+
+| CC | goodput range | mean |
+|---|---|---|
+| CUBIC | 31.8-45.7 Mbps | ~39 Mbps |
+| BBR | 23.5-39.0 Mbps | ~31 Mbps |
+| NewReno | 1.4-5.5 Mbps | ~3.4 Mbps |
+
+Same CUBIC > BBR >> NewReno ordering and "most declared loss is spurious
+reordering, not real drops" pattern (60-99% spurious, genuine loss under
+~2% for BBR/CUBIC) as stream mode — good cross-validation. **n=2 is too
+noisy to say anything about `packet_threshold`'s effect in datagram mode**
+though (ranges overlap heavily across thresholds; NewReno's especially,
+given its small per-run packet counts of 5-11k vs. 60-136k for BBR/CUBIC).
+Scaled the sweep up to match stream mode's rigor — full 8-point threshold
+grid `[3, 5, 10, 15, 20, 25, 30, 40]`, `sweep_repeats: 5` (120 runs,
+~50 min) — to get a real threshold trend; in progress as of this entry.

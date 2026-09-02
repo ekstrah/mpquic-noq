@@ -10,7 +10,11 @@ a lesson from this investigation (see "Trust nothing without checking" below).
 
 ## What this investigation is
 
-Working with n0q (`/home/dongho/Desktop/git/n0q`, crate `noq-proto`), a
+Working with n0q (`../n0q` relative to this repo — `/home/chococake/Desktop/n0q`
+on this machine; an earlier version of this doc said `/home/dongho/Desktop/git/n0q`,
+which no longer exists here — always resolve via `mininet_topo.py`'s
+`n0q_dir = os.path.join(repo_dir, "../n0q")` rather than trusting a hard-coded
+path, since usernames/layouts have drifted across sessions), crate `noq-proto`, a
 multipath QUIC implementation, tested against an emulated 3-link topology
 (`mpquic-noq/mininet_topo.py` — LEO/mobile/mesh links with netem jitter/loss)
 using `mpquic-noq/scripts/*.py` for analysis. **Datagram mode (RFC 9221) is
@@ -77,16 +81,46 @@ shifted from stream-mode bulk-transfer testing to datagram-mode reliability.
    routing, `RETIRE_CONNECTION_ID` handling) resolves by keyed lookup against
    maps kept current as CIDs are issued/retired, never a cached pointer.
 
-5. **Datagram-mode benchmark bug found and fixed.** The datagram test
-   (`apps/src/client.rs::run_datagram_test`) used `send_datagram()`, which
-   silently evicts old unsent data from the local send buffer under
+5. **Datagram-mode benchmark bug found and fixed — twice.** First bug: the
+   test (`apps/src/client.rs::run_datagram_test`) used `send_datagram()`,
+   which silently evicts old unsent data from the local send buffer under
    backpressure (`noq-proto/src/connection/datagrams.rs::make_space_for`,
-   only `trace!`-logged, no counter). This meant the "Sent N dgrams" the
-   benchmark printed was dominated by host-scheduling artifacts, not real
-   network capacity — confirmed by an outlier run reporting 40,140 sent when
-   typical runs were in the hundreds. Fixed by switching to
-   `send_datagram_wait()`, which respects real buffer backpressure instead of
-   evicting. Not yet re-validated against a live sweep with this fix.
+   only `trace!`-logged). Fixed by switching to `send_datagram_wait()` —
+   but that fix, applied without re-validating against a live sweep, turned
+   out to break the benchmark completely: **every run of the next validation
+   sweep reported "Sent 0 dgrams, Received 0 dgrams... 0.00 Mbps."**
+   Root-caused as a *second*, unrelated bug: `run_datagram_test` hard-codes a
+   1200-byte payload, but RFC 9000 §14.1 mandates every path — including a
+   freshly-opened multipath subflow — start at a conservative 1200-byte MTU
+   floor and grow it only via DPLPMTUD (RFC 8899) over subsequent RTTs; with
+   multipath, `Connection::current_mtu()` (`noq-proto/src/connection/mod.rs:7022`)
+   is the *minimum* MTU across all active paths (intentional — RFC 9221 §4
+   requires a sent datagram not exceed the current path's usable size, and
+   a size safe for the smallest active path is safe for any of them). Since
+   the benchmark opens 3 fresh subflows moments before the test starts, at
+   least one is still at the 1200-byte floor, and after QUIC/AEAD overhead
+   (~21-29 bytes) and DATAGRAM framing (9 bytes) the usable size never
+   reaches 1200 — so the very first `send_datagram_wait()` call returned
+   `TooLarge`, and the benchmark's `Ok(Err(_)) => break` treated that as
+   fatal, aborting the whole 15s test after 0 sends, on every single run.
+   **Initially misdiagnosed** as a bug in `SendDatagram::poll`'s retry loop
+   (`noq/src/connection.rs:1164-1198`) — disproven by building a standalone
+   reproduction before touching that code (see `TODO.md`'s 2026-09-01 entry
+   for the full story; that code was left untouched, it isn't broken).
+   **Fixed** by querying `conn.max_datagram_size()` each send and sizing the
+   payload to `min(1200, max_size)`, retrying (not aborting) on `TooLarge` —
+   spec-correct per RFC 9221, since the size limit was always meant to be
+   dynamic. **Verified**: loopback repro went from 0/0 to 14,992/14,992
+   sent/received; live mininet re-run recovered real throughput (CUBIC
+   ~39 Mbps mean, BBR ~31 Mbps, NewReno ~3.4 Mbps — same ordering as stream
+   mode). Also surfaced a **separate methodology caveat**: the benchmark's
+   printed "Sent N dgrams" undercounts nothing but *overstates* real wire
+   transmission — `send_datagram_wait()` completing only means "accepted
+   into the local outgoing queue," and `conn.close()` at test end discards
+   whatever's still queued there. Gap scales inversely with throughput
+   (CUBIC 2-11%, BBR 10-40%, NewReno 18-73% sent-but-never-received) — the
+   reported `Mbps` (computed from received bytes only) is unaffected, but
+   don't cite "Sent N dgrams" as a transmission-rate metric.
 
 ## Trust nothing without checking
 
@@ -103,6 +137,13 @@ Two things burned this investigation and are worth internalizing:
   should never be assumed to persist between sessions; anything worth keeping
   from it should be extracted into a committed file promptly (this is why
   `scripts/threshold_sweep_*.csv` exist as separate saved snapshots).
+- `mininet_topo.py` runs prebuilt `target/release/n0q-{server,client}`
+  binaries directly whenever they already exist (`use_direct_bin`,
+  `mininet_topo.py:270`), only falling back to `cargo run --release` on a
+  from-scratch checkout. A source fix in `../n0q` does **not** get picked up
+  by the next sweep unless you `cargo build --release --bin n0q-server --bin
+  n0q-client` first — cost a full wasted 24-run sweep cycle on 2026-09-01
+  when a datagram-benchmark fix's binary was never rebuilt.
 
 ## Auto-commit note
 
@@ -130,12 +171,19 @@ it is.
 
 ## Current in-flight state (as of this handoff)
 
-The user is running a sweep **on a remote machine** (mininet requires root;
-this session's sandbox can't `sudo`). Current `mininet_topo.py` config:
-scheduler collapsed to `MINRTT` only (3x redundant sweeping removed per
-finding #1), `packet_threshold` in `[3, 10, 20, 40]`, `sweep_repeats: 2` —
-a small first pass (~10 min/mode, ~20 min both) to validate the repeat
-mechanism and the datagram harness fix before committing to a larger run.
+The user runs sweeps themselves (mininet requires root; this session's
+sandbox can't `sudo` — confirmed still true as of 2026-09-01, though `mn` is
+installed locally so this may be the *same* machine, just requiring the
+user's own sudo access rather than a genuinely separate remote host). The
+small first-pass validation sweep (`packet_threshold` in `[3, 10, 20, 40]`,
+`sweep_repeats: 2`) is done and analyzed for both stream and (after the
+finding-#5 fix + rebuild) datagram mode — see `TODO.md`'s 2026-09-01 entry
+for datagram-mode results. `mininet_topo.py` config has been scaled up to
+match stream mode's rigor: `packet_threshold` in
+`[3, 5, 10, 15, 20, 25, 30, 40]` (full 8-point grid), `sweep_repeats: 5`
+(120 runs, ~50 min) — **a sweep with this config is in progress as of this
+handoff**; scheduler stays collapsed to `MINRTT` only (3x redundant sweeping
+removed per finding #1).
 
 **To analyze once results land:** only `logs/qlog/*-server.qlog` and
 `logs/stdout/client_*.log` (+ optionally `server_*.log`, `sweep_*_summary.csv`)
@@ -170,3 +218,7 @@ kind of silent collision once).
   packet_threshold dataset (merged from two sweeps after a mid-session
   `logs/` loss, reconstructed from conversation transcript — see TODO.md for
   the story)
+- `scripts/threshold_sweep_analysis_datagram.csv` /
+  `scripts/threshold_sweep_analysis_stream.csv` — the 24-run MINRTT-only
+  validation-sweep datasets (2026-09-01), post-fix for datagram mode (see
+  finding #5)
