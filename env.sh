@@ -53,9 +53,9 @@ LINK_C_JITTER_MS=1
 LINK_C_LOSS_PCT=0.0
 
 # --- sweep: every (scheduler, cc) combo, and per-combo timing ---
-# Single source of truth for run-server-sweep.sh and run-client-sweep.sh -
-# both loop this same list in this same order so they stay aligned with
-# no channel between the two boxes (see those scripts for how).
+# Historical config for the physical two-box (client/server NIC) sweep
+# workflow; mininet_topo.py now drives sweeps in an emulated topology
+# instead and keeps its own copy of these values (see its header comment).
 
 SWEEP_COMBOS=(
   "MINRTT BBR"
@@ -75,9 +75,7 @@ SWEEP_WINDOW_SEC=25          # per-combo slot length on the SERVER side
 SWEEP_CLIENT_DELAY_SEC=5     # CLIENT startup delay, lets the fresh server come up
 SWEEP_CLIENT_DURATION_SEC=15 # n0q client --duration per combo
 
-# NOTE: this file is the same on both boxes at clone time. Only the three
-# CHANGE_ME lines for your box differ in practice (net-server.sh only
-# reads SERVER_IFACE_*, net-client.sh only reads CLIENT_IFACE_*), so
-# leaving the *other* box's CHANGE_ME values unset on your local edit is
-# harmless — just don't commit a CHANGE_ME on the three variables the
-# script you're about to run actually needs.
+# NOTE: this file documents the physical two-box wiring/shaping targets
+# that the (now removed) net-*.sh/shape-*.sh scripts used to read. Kept
+# for reference — mininet_topo.py is the active sweep workflow and does
+# not source this file.

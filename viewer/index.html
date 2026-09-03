@@ -1,0 +1,886 @@
+<title>n0q Datagram Sweep</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --page:        #f9f9f7;
+    --surface:     #fcfcfb;
+    --surface-2:   #f2f1ec;
+    --ink:         #0b0b0b;
+    --ink-2:       #52514e;
+    --ink-muted:   #898781;
+    --grid:        #e1e0d9;
+    --baseline:    #c3c2b7;
+    --border:      rgba(11,11,11,0.10);
+    --accent:      #4a3aa7;
+    --accent-ink:  #ffffff;
+    --good:        #0ca30c;
+    --bbr:         #2a78d6;
+    --cubic:       #eb6834;
+    --newreno:     #1baf7a;
+    --leo:         #eda100;
+    --mobile:      #e87ba4;
+    --mesh:        #008300;
+    --band-bbr:    rgba(42,120,214,0.14);
+    --band-cubic:  rgba(235,104,52,0.14);
+    --band-newreno:rgba(27,175,122,0.16);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:        #0d0d0d;
+      --surface:     #1a1a19;
+      --surface-2:   #232322;
+      --ink:         #ffffff;
+      --ink-2:       #c3c2b7;
+      --ink-muted:   #898781;
+      --grid:        #2c2c2a;
+      --baseline:    #383835;
+      --border:      rgba(255,255,255,0.10);
+      --accent:      #9085e9;
+      --accent-ink:  #12101f;
+      --good:        #0ca30c;
+      --bbr:         #3987e5;
+      --cubic:       #d95926;
+      --newreno:     #199e70;
+      --leo:         #c98500;
+      --mobile:      #d55181;
+      --mesh:        #1baf7a;
+      --band-bbr:    rgba(57,135,229,0.18);
+      --band-cubic:  rgba(217,89,38,0.18);
+      --band-newreno:rgba(25,158,112,0.20);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:        #0d0d0d;
+    --surface:     #1a1a19;
+    --surface-2:   #232322;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --ink-muted:   #898781;
+    --grid:        #2c2c2a;
+    --baseline:    #383835;
+    --border:      rgba(255,255,255,0.10);
+    --accent:      #9085e9;
+    --accent-ink:  #12101f;
+    --good:        #0ca30c;
+    --bbr:         #3987e5;
+    --cubic:       #d95926;
+    --newreno:     #199e70;
+    --leo:         #c98500;
+    --mobile:      #d55181;
+    --mesh:        #1baf7a;
+    --band-bbr:    rgba(57,135,229,0.18);
+    --band-cubic:  rgba(217,89,38,0.18);
+    --band-newreno:rgba(25,158,112,0.20);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", monospace; font-variant-numeric: tabular-nums; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+    gap: 16px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border);
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600; margin: 0 0 6px;
+  }
+  h1 { font-size: 27px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--ink-2); font-size: 14px; max-width: 62ch; line-height: 1.5; margin: 0; }
+  .meta-box { text-align: right; font-size: 12px; color: var(--ink-muted); line-height: 1.6; }
+  .meta-box .fresh { color: var(--good); font-weight: 600; }
+
+  /* ---- zone: one major grouping = one kicker + one heading + one note ---- */
+  .zone { margin-bottom: 46px; }
+  .zone-head { margin-bottom: 16px; max-width: 74ch; }
+  .zone-kicker {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ink-muted); font-weight: 600; margin: 0 0 5px;
+  }
+  h2 { font-size: 17px; font-weight: 600; margin: 0 0 5px; letter-spacing: -0.005em; }
+  .zone-note { font-size: 13px; color: var(--ink-2); margin: 0; line-height: 1.55; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px;
+  }
+
+  /* KPI tiles */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .kpi .label { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .kpi .value { font-size: 24px; font-weight: 600; font-family: "IBM Plex Mono", monospace; letter-spacing: -0.02em; }
+  .kpi .value small { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+  .kpi .foot { font-size: 11px; color: var(--ink-muted); margin-top: 6px; line-height: 1.4; }
+
+  /* small multiples / chart cards — one consistent shape for every chart on the page */
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 860px) { .grid3 { grid-template-columns: 1fr; } .grid2 { grid-template-columns: 1fr; } }
+
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px 14px; }
+  .chart-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .chart-card-head .ct { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .chart-card-head .stat { font-size: 11px; color: var(--ink-muted); font-family: "IBM Plex Mono", monospace; white-space: nowrap; }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex: none; }
+
+  svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+  .axis-label { fill: var(--ink-muted); font-size: 10px; font-family: "IBM Plex Mono", monospace; }
+  .band { opacity: 1; }
+  .line-mean { fill: none; stroke-width: 2; }
+  .dot { stroke: var(--surface); stroke-width: 1.5; cursor: pointer; }
+  .crosshair-x { stroke: var(--ink-muted); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0; pointer-events: none; }
+
+  .chart-foot {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--grid);
+    display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--ink-2);
+  }
+  .chart-foot:empty { display: none; }
+  .chart-foot.note { display: block; border-top: none; margin-top: 12px; padding: 10px 12px;
+    background: var(--surface-2); border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0; line-height: 1.55; }
+  .chart-foot.note b { color: var(--ink); }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+
+  .tooltip {
+    position: fixed; pointer-events: none; z-index: 50; background: var(--ink); color: var(--page);
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px; padding: 8px 10px; border-radius: 7px;
+    line-height: 1.55; box-shadow: 0 6px 20px rgba(0,0,0,0.25); opacity: 0; transition: opacity 0.08s;
+    white-space: nowrap;
+  }
+  .tooltip b { font-weight: 600; }
+  .tooltip .row { display: flex; gap: 10px; justify-content: space-between; }
+  .tooltip .row .k { opacity: 0.65; }
+
+  /* bars */
+  .bar-hover:hover { filter: brightness(1.08); }
+  .bar-label { font-size: 10.5px; fill: var(--ink-2); font-family: "IBM Plex Mono", monospace; }
+  .bar-cat-label { font-size: 11px; fill: var(--ink-2); font-family: "IBM Plex Sans", sans-serif; font-weight: 500; }
+
+  /* table */
+  .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .filters .flabel { font-size: 11.5px; color: var(--ink-muted); margin-right: 2px; }
+  select, .chip {
+    font-family: "IBM Plex Sans", sans-serif; font-size: 12.5px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--ink); border-radius: 6px; padding: 6px 10px; cursor: pointer;
+  }
+  select:focus, .chip:focus, button:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; }
+  .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .chip .sw { width: 8px; height: 8px; border-radius: 50%; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--surface); min-width: 920px; }
+  thead th {
+    position: sticky; top: 0; background: var(--surface-2); text-align: right; font-weight: 600;
+    padding: 9px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer;
+    color: var(--ink-2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  thead th:first-child, thead th:nth-child(2) { text-align: left; }
+  thead th.sorted { color: var(--accent); }
+  thead th .arrow { opacity: 0.5; font-size: 9px; margin-left: 3px; }
+  tbody td { text-align: right; padding: 7px 10px; font-family: "IBM Plex Mono", monospace; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  tbody td:first-child, tbody td:nth-child(2) { text-align: left; font-family: "IBM Plex Sans", sans-serif; }
+  tbody tr:hover td { background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  .cc-pill { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; font-family: "IBM Plex Sans", sans-serif; }
+  .cc-pill .sw { width: 8px; height: 8px; border-radius: 2px; }
+  .table-caption { font-size: 11.5px; color: var(--ink-muted); margin-top: 8px; }
+
+  footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--ink-muted); line-height: 1.6; }
+  a { color: var(--accent); }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">n0q &middot; multipath QUIC &middot; RFC 9221 datagram mode</p>
+      <h1>Datagram packet_threshold sweep</h1>
+      <p class="sub">MINRTT scheduler &middot; 3 congestion controllers &middot; 8 loss-detection thresholds &middot; 5 repeats per point, run over the LEO&nbsp;/&nbsp;Mobile&nbsp;/&nbsp;Mesh emulated topology.</p>
+    </div>
+    <div class="meta-box">
+      <div><span class="fresh">&#9679;</span> <span id="freshness">loaded</span></div>
+      <div id="run-count-meta"></div>
+      <div>source: <code class="mono">logs/</code> + qlog trigger analysis</div>
+    </div>
+  </header>
+
+  <section class="zone">
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <section class="zone">
+    <div class="zone-head">
+      <p class="zone-kicker">Throughput</p>
+      <h2>Goodput vs. loss-detection threshold</h2>
+      <p class="zone-note">Mean received throughput (line) with min&ndash;max range across 5 repeats (band). Each panel keeps its own scale &mdash; CUBIC and BBR run 6&ndash;10&times; above NewReno.</p>
+    </div>
+    <div class="grid3" id="goodput-panels"></div>
+  </section>
+
+  <section class="zone">
+    <div class="zone-head">
+      <p class="zone-kicker">Loss</p>
+      <h2>Most "declared loss" isn't real</h2>
+      <p class="zone-note">Genuine wire loss (qlog-confirmed, never later covered by a <code class="mono">packets_acked</code>) sits flat near 1&ndash;3% and doesn't move with the threshold, as expected of a network property. The double-digit "declared" rate the detector reports is almost entirely spurious reordering.</p>
+    </div>
+    <div class="grid2">
+      <div class="chart-card">
+        <div class="chart-card-head"><span class="ct">Genuine loss by threshold</span></div>
+        <div id="genuine-chart"></div>
+        <div class="chart-foot" id="genuine-legend"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-head"><span class="ct">Declared vs. genuine (mean)</span></div>
+        <div id="declared-chart"></div>
+        <div class="chart-foot" id="declared-legend"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="zone">
+    <div class="zone-head">
+      <p class="zone-kicker">Multipath</p>
+      <h2>Path selection isn't RTT-aware</h2>
+      <p class="zone-note">The scheduler is a no-op: traffic just always prefers the lowest PathId. Mesh (0% configured loss, 2ms delay) usually wins that race by finishing its handshake first &mdash; not by being chosen for its RTT.</p>
+    </div>
+    <div class="grid2">
+      <div class="chart-card">
+        <div class="chart-card-head"><span class="ct">Received-byte share by path</span></div>
+        <div id="path-chart"></div>
+        <div class="chart-foot" id="path-legend"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-head"><span class="ct">Sent&ndash;received gap vs. genuine loss</span></div>
+        <div id="gap-chart"></div>
+        <div class="chart-foot" id="gap-legend"></div>
+        <div class="chart-foot note">Mostly <b>not</b> loss &mdash; <code class="mono">send_datagram_wait()</code> only confirms local queueing, and <code class="mono">conn.close()</code> discards whatever's still queued when the 15s test ends. The genuine-loss panel above is the real number.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="zone">
+    <div class="zone-head">
+      <p class="zone-kicker">Raw data</p>
+      <h2>All 120 runs</h2>
+    </div>
+    <div class="card">
+      <div class="filters">
+        <span class="flabel">CC</span>
+        <button class="chip" data-cc="BBR" aria-pressed="true"><span class="sw" style="background:var(--bbr)"></span>BBR</button>
+        <button class="chip" data-cc="CUBIC" aria-pressed="true"><span class="sw" style="background:var(--cubic)"></span>CUBIC</button>
+        <button class="chip" data-cc="NEWRENO" aria-pressed="true"><span class="sw" style="background:var(--newreno)"></span>NewReno</button>
+        <span class="flabel" style="margin-left:10px">threshold</span>
+        <select id="pt-filter">
+          <option value="all">all</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table id="run-table">
+          <thead><tr id="table-head"></tr></thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+      <p class="table-caption" id="table-caption"></p>
+    </div>
+  </section>
+
+  <footer>
+    Generated from <code class="mono">logs/sweep_datagram_summary.csv</code>, <code class="mono">logs/stdout/client_*.log</code>, and <code class="mono">scripts/threshold_sweep_analysis_datagram.csv</code> (qlog genuine/spurious loss classification). This is a static snapshot &mdash; re-run the sweep and regenerate to refresh.
+  </footer>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DATA = {"generated_at":"2026-09-03T04:56:28.930068","meta":{"scheduler":"MINRTT","ccs":["BBR","CUBIC","NEWRENO"],"thresholds":[3,5,10,15,20,25,30,40],"repeats":5,"links":{"a":{"name":"LEO Satellite","bw":"62M down / 18M up","delay_ms":25,"jitter_ms":13,"loss_pct":0.17},"b":{"name":"Mobile / Cellular","bw":"30M symmetric","delay_ms":50,"jitter_ms":5,"loss_pct":0.006},"c":{"name":"Mesh Radio","bw":"30M symmetric","delay_ms":2,"jitter_ms":1,"loss_pct":0.0}}},"runs":[{"cc":"BBR","pt":3,"rep":1,"sent_pkts":74961,"declared_pct":32.41,"spurious_pct":97.59,"genuine_pct":0.78,"genuine_count":585,"mbps":28.81,"a_share":11.3,"b_share":47.2,"c_share":41.5,"total_rx_bytes":59748730,"sent_dgrams":50870,"recv_dgrams":46479,"recv_bytes":54012208,"gap_pct":8.63},{"cc":"BBR","pt":3,"rep":2,"sent_pkts":65385,"declared_pct":25.74,"spurious_pct":95.14,"genuine_pct":1.25,"genuine_count":817,"mbps":30.11,"a_share":5.1,"b_share":19.6,"c_share":75.2,"total_rx_bytes":60889577,"sent_dgrams":53792,"recv_dgrams":48580,"recv_bytes":56449960,"gap_pct":9.69},{"cc":"BBR","pt":3,"rep":3,"sent_pkts":69707,"declared_pct":25.1,"spurious_pct":95.6,"genuine_pct":1.103,"genuine_count":769,"mbps":31.97,"a_share":11.7,"b_share":19.8,"c_share":68.6,"total_rx_bytes":64807583,"sent_dgrams":59900,"recv_dgrams":51568,"recv_bytes":59936532,"gap_pct":13.91},{"cc":"BBR","pt":3,"rep":4,"sent_pkts":66227,"declared_pct":26.34,"spurious_pct":96.73,"genuine_pct":0.862,"genuine_count":571,"mbps":30.02,"a_share":4.6,"b_share":26.1,"c_share":69.2,"total_rx_bytes":60874499,"sent_dgrams":58776,"recv_dgrams":48444,"recv_bytes":56293638,"gap_pct":17.58},{"cc":"BBR","pt":3,"rep":5,"sent_pkts":56720,"declared_pct":35.23,"spurious_pct":96.21,"genuine_pct":1.336,"genuine_count":758,"mbps":26.06,"a_share":12.7,"b_share":26.1,"c_share":61.2,"total_rx_bytes":53104040,"sent_dgrams":72397,"recv_dgrams":42048,"recv_bytes":48861752,"gap_pct":41.92},{"cc":"BBR","pt":5,"rep":1,"sent_pkts":71039,"declared_pct":28.92,"spurious_pct":96.3,"genuine_pct":1.071,"genuine_count":761,"mbps":24.93,"a_share":12.7,"b_share":58.6,"c_share":28.8,"total_rx_bytes":52368942,"sent_dgrams":44310,"recv_dgrams":40231,"recv_bytes":46750930,"gap_pct":9.21},{"cc":"BBR","pt":5,"rep":2,"sent_pkts":38105,"declared_pct":24.58,"spurious_pct":95.96,"genuine_pct":0.992,"genuine_count":378,"mbps":16.19,"a_share":28.3,"b_share":22.8,"c_share":48.9,"total_rx_bytes":33118169,"sent_dgrams":31447,"recv_dgrams":26119,"recv_bytes":30354116,"gap_pct":16.94},{"cc":"BBR","pt":5,"rep":3,"sent_pkts":78391,"declared_pct":26.32,"spurious_pct":94.47,"genuine_pct":1.456,"genuine_count":1141,"mbps":33.1,"a_share":9.9,"b_share":24.1,"c_share":66.0,"total_rx_bytes":67741935,"sent_dgrams":68188,"recv_dgrams":53412,"recv_bytes":62073180,"gap_pct":21.67},{"cc":"BBR","pt":5,"rep":4,"sent_pkts":98047,"declared_pct":28.02,"spurious_pct":95.34,"genuine_pct":1.307,"genuine_count":1281,"mbps":37.54,"a_share":16.3,"b_share":15.4,"c_share":68.2,"total_rx_bytes":77507110,"sent_dgrams":63229,"recv_dgrams":60567,"recv_bytes":70383452,"gap_pct":4.21},{"cc":"BBR","pt":5,"rep":5,"sent_pkts":88837,"declared_pct":26.32,"spurious_pct":95.66,"genuine_pct":1.143,"genuine_count":1015,"mbps":35.61,"a_share":8.8,"b_share":29.6,"c_share":61.6,"total_rx_bytes":73261078,"sent_dgrams":66601,"recv_dgrams":57454,"recv_bytes":66761548,"gap_pct":13.73},{"cc":"BBR","pt":10,"rep":1,"sent_pkts":73926,"declared_pct":19.81,"spurious_pct":93.92,"genuine_pct":1.205,"genuine_count":891,"mbps":32.51,"a_share":9.4,"b_share":31.7,"c_share":58.9,"total_rx_bytes":66160770,"sent_dgrams":59331,"recv_dgrams":52463,"recv_bytes":60967554,"gap_pct":11.58},{"cc":"BBR","pt":10,"rep":2,"sent_pkts":78580,"declared_pct":30.6,"spurious_pct":96.32,"genuine_pct":1.128,"genuine_count":886,"mbps":30.86,"a_share":10.6,"b_share":53.7,"c_share":35.7,"total_rx_bytes":63721753,"sent_dgrams":52030,"recv_dgrams":49803,"recv_bytes":57872948,"gap_pct":4.28},{"cc":"BBR","pt":10,"rep":3,"sent_pkts":72461,"declared_pct":16.8,"spurious_pct":96.96,"genuine_pct":0.511,"genuine_count":370,"mbps":32.62,"a_share":5.1,"b_share":20.1,"c_share":74.8,"total_rx_bytes":66436507,"sent_dgrams":64504,"recv_dgrams":52634,"recv_bytes":61160708,"gap_pct":18.4},{"cc":"BBR","pt":10,"rep":4,"sent_pkts":33275,"declared_pct":23.49,"spurious_pct":95.25,"genuine_pct":1.115,"genuine_count":371,"mbps":12.56,"a_share":23.9,"b_share":61.4,"c_share":14.7,"total_rx_bytes":26318524,"sent_dgrams":74994,"recv_dgrams":20268,"recv_bytes":23551416,"gap_pct":72.97},{"cc":"BBR","pt":10,"rep":5,"sent_pkts":87654,"declared_pct":21.7,"spurious_pct":97.03,"genuine_pct":0.645,"genuine_count":565,"mbps":34.93,"a_share":7.8,"b_share":34.8,"c_share":57.4,"total_rx_bytes":72080237,"sent_dgrams":59726,"recv_dgrams":56347,"recv_bytes":65484942,"gap_pct":5.66},{"cc":"BBR","pt":15,"rep":1,"sent_pkts":87005,"declared_pct":16.57,"spurious_pct":96.78,"genuine_pct":0.534,"genuine_count":465,"mbps":36.4,"a_share":9.3,"b_share":23.9,"c_share":66.8,"total_rx_bytes":74662537,"sent_dgrams":69369,"recv_dgrams":58729,"recv_bytes":68253814,"gap_pct":15.34},{"cc":"BBR","pt":15,"rep":2,"sent_pkts":66695,"declared_pct":24.11,"spurious_pct":96.04,"genuine_pct":0.954,"genuine_count":636,"mbps":27.37,"a_share":14.1,"b_share":59.3,"c_share":26.7,"total_rx_bytes":56365155,"sent_dgrams":70135,"recv_dgrams":44162,"recv_bytes":51316244,"gap_pct":37.03},{"cc":"BBR","pt":15,"rep":3,"sent_pkts":103014,"declared_pct":23.32,"spurious_pct":97.73,"genuine_pct":0.529,"genuine_count":545,"mbps":39.3,"a_share":13.7,"b_share":44.2,"c_share":42.1,"total_rx_bytes":81580246,"sent_dgrams":68193,"recv_dgrams":63405,"recv_bytes":73685426,"gap_pct":7.02},{"cc":"BBR","pt":15,"rep":4,"sent_pkts":74058,"declared_pct":15.75,"spurious_pct":96.76,"genuine_pct":0.51,"genuine_count":378,"mbps":33.27,"a_share":4.5,"b_share":29.3,"c_share":66.1,"total_rx_bytes":67703515,"sent_dgrams":63821,"recv_dgrams":53683,"recv_bytes":62379646,"gap_pct":15.89},{"cc":"BBR","pt":15,"rep":5,"sent_pkts":68758,"declared_pct":18.93,"spurious_pct":92.55,"genuine_pct":1.409,"genuine_count":969,"mbps":30.49,"a_share":10.1,"b_share":22.2,"c_share":67.6,"total_rx_bytes":62019924,"sent_dgrams":67601,"recv_dgrams":49200,"recv_bytes":57170666,"gap_pct":27.22},{"cc":"BBR","pt":20,"rep":1,"sent_pkts":69132,"declared_pct":13.67,"spurious_pct":94.77,"genuine_pct":0.715,"genuine_count":494,"mbps":33.4,"a_share":4.5,"b_share":24.4,"c_share":71.1,"total_rx_bytes":67573674,"sent_dgrams":71019,"recv_dgrams":53891,"recv_bytes":62621342,"gap_pct":24.12},{"cc":"BBR","pt":20,"rep":2,"sent_pkts":89339,"declared_pct":19.92,"spurious_pct":96.51,"genuine_pct":0.696,"genuine_count":622,"mbps":36.57,"a_share":9.9,"b_share":40.6,"c_share":49.5,"total_rx_bytes":75043711,"sent_dgrams":68291,"recv_dgrams":59012,"recv_bytes":68572856,"gap_pct":13.59},{"cc":"BBR","pt":20,"rep":3,"sent_pkts":66105,"declared_pct":17.03,"spurious_pct":94.94,"genuine_pct":0.862,"genuine_count":570,"mbps":29.3,"a_share":11.5,"b_share":29.9,"c_share":58.6,"total_rx_bytes":59715878,"sent_dgrams":61772,"recv_dgrams":47272,"recv_bytes":54934130,"gap_pct":23.47},{"cc":"BBR","pt":20,"rep":4,"sent_pkts":87725,"declared_pct":16.07,"spurious_pct":96.13,"genuine_pct":0.621,"genuine_count":545,"mbps":36.22,"a_share":6.0,"b_share":32.2,"c_share":61.8,"total_rx_bytes":74318964,"sent_dgrams":63502,"recv_dgrams":58433,"recv_bytes":67908950,"gap_pct":7.98},{"cc":"BBR","pt":20,"rep":5,"sent_pkts":95142,"declared_pct":17.92,"spurious_pct":97.12,"genuine_pct":0.516,"genuine_count":491,"mbps":37.79,"a_share":6.4,"b_share":38.3,"c_share":55.2,"total_rx_bytes":78252522,"sent_dgrams":69224,"recv_dgrams":60992,"recv_bytes":70872704,"gap_pct":11.89},{"cc":"BBR","pt":25,"rep":1,"sent_pkts":66810,"declared_pct":14.82,"spurious_pct":95.39,"genuine_pct":0.684,"genuine_count":457,"mbps":30.26,"a_share":5.5,"b_share":23.1,"c_share":71.4,"total_rx_bytes":61503448,"sent_dgrams":62362,"recv_dgrams":48828,"recv_bytes":56745014,"gap_pct":21.7},{"cc":"BBR","pt":25,"rep":2,"sent_pkts":89637,"declared_pct":17.42,"spurious_pct":96.08,"genuine_pct":0.683,"genuine_count":612,"mbps":36.82,"a_share":7.0,"b_share":27.4,"c_share":65.6,"total_rx_bytes":75443002,"sent_dgrams":61776,"recv_dgrams":59408,"recv_bytes":69033046,"gap_pct":3.83},{"cc":"BBR","pt":25,"rep":3,"sent_pkts":94327,"declared_pct":15.6,"spurious_pct":96.09,"genuine_pct":0.61,"genuine_count":575,"mbps":39.77,"a_share":9.5,"b_share":30.9,"c_share":59.5,"total_rx_bytes":81394676,"sent_dgrams":66918,"recv_dgrams":64173,"recv_bytes":74575790,"gap_pct":4.1},{"cc":"BBR","pt":25,"rep":4,"sent_pkts":74494,"declared_pct":17.47,"spurious_pct":93.16,"genuine_pct":1.195,"genuine_count":890,"mbps":31.59,"a_share":6.5,"b_share":22.7,"c_share":70.8,"total_rx_bytes":64443250,"sent_dgrams":61703,"recv_dgrams":50978,"recv_bytes":59242402,"gap_pct":17.38},{"cc":"BBR","pt":25,"rep":5,"sent_pkts":90009,"declared_pct":24.22,"spurious_pct":97.14,"genuine_pct":0.693,"genuine_count":624,"mbps":35.55,"a_share":5.7,"b_share":34.4,"c_share":59.9,"total_rx_bytes":73413001,"sent_dgrams":69732,"recv_dgrams":57355,"recv_bytes":66651678,"gap_pct":17.75},{"cc":"BBR","pt":30,"rep":1,"sent_pkts":48041,"declared_pct":13.75,"spurious_pct":93.03,"genuine_pct":0.958,"genuine_count":460,"mbps":24.52,"a_share":6.0,"b_share":23.3,"c_share":70.7,"total_rx_bytes":49208565,"sent_dgrams":59293,"recv_dgrams":39559,"recv_bytes":45967558,"gap_pct":33.28},{"cc":"BBR","pt":30,"rep":2,"sent_pkts":74511,"declared_pct":14.31,"spurious_pct":96.24,"genuine_pct":0.538,"genuine_count":401,"mbps":34.39,"a_share":12.0,"b_share":26.7,"c_share":61.3,"total_rx_bytes":70102305,"sent_dgrams":74998,"recv_dgrams":55476,"recv_bytes":64476336,"gap_pct":26.03},{"cc":"BBR","pt":30,"rep":3,"sent_pkts":77574,"declared_pct":15.87,"spurious_pct":94.79,"genuine_pct":0.826,"genuine_count":641,"mbps":33.92,"a_share":5.2,"b_share":19.5,"c_share":75.3,"total_rx_bytes":69147546,"sent_dgrams":60476,"recv_dgrams":54720,"recv_bytes":63593912,"gap_pct":9.52},{"cc":"BBR","pt":30,"rep":4,"sent_pkts":69874,"declared_pct":13.19,"spurious_pct":96.22,"genuine_pct":0.498,"genuine_count":348,"mbps":30.51,"a_share":6.3,"b_share":27.7,"c_share":66.0,"total_rx_bytes":62384382,"sent_dgrams":68922,"recv_dgrams":49237,"recv_bytes":57213394,"gap_pct":28.56},{"cc":"BBR","pt":30,"rep":5,"sent_pkts":101143,"declared_pct":24.62,"spurious_pct":98.0,"genuine_pct":0.493,"genuine_count":499,"mbps":39.04,"a_share":18.5,"b_share":60.3,"c_share":21.2,"total_rx_bytes":81050767,"sent_dgrams":66710,"recv_dgrams":62991,"recv_bytes":73200292,"gap_pct":5.57},{"cc":"BBR","pt":40,"rep":1,"sent_pkts":77700,"declared_pct":18.3,"spurious_pct":96.13,"genuine_pct":0.708,"genuine_count":550,"mbps":30.77,"a_share":8.4,"b_share":64.2,"c_share":27.4,"total_rx_bytes":63521273,"sent_dgrams":58219,"recv_dgrams":49658,"recv_bytes":57702596,"gap_pct":14.7},{"cc":"BBR","pt":40,"rep":2,"sent_pkts":97373,"declared_pct":24.48,"spurious_pct":93.48,"genuine_pct":1.597,"genuine_count":1555,"mbps":37.49,"a_share":13.3,"b_share":19.9,"c_share":66.8,"total_rx_bytes":77316908,"sent_dgrams":62258,"recv_dgrams":60498,"recv_bytes":70298676,"gap_pct":2.83},{"cc":"BBR","pt":40,"rep":3,"sent_pkts":68218,"declared_pct":14.88,"spurious_pct":95.23,"genuine_pct":0.709,"genuine_count":484,"mbps":30.23,"a_share":5.6,"b_share":29.1,"c_share":65.4,"total_rx_bytes":61563240,"sent_dgrams":61969,"recv_dgrams":48788,"recv_bytes":56693252,"gap_pct":21.27},{"cc":"BBR","pt":40,"rep":4,"sent_pkts":73912,"declared_pct":16.16,"spurious_pct":94.78,"genuine_pct":0.844,"genuine_count":624,"mbps":32.0,"a_share":6.9,"b_share":37.8,"c_share":55.3,"total_rx_bytes":65260315,"sent_dgrams":60429,"recv_dgrams":51645,"recv_bytes":60012668,"gap_pct":14.54},{"cc":"BBR","pt":40,"rep":5,"sent_pkts":84120,"declared_pct":16.79,"spurious_pct":95.02,"genuine_pct":0.837,"genuine_count":704,"mbps":36.45,"a_share":9.1,"b_share":25.2,"c_share":65.7,"total_rx_bytes":74236061,"sent_dgrams":67882,"recv_dgrams":58818,"recv_bytes":68354116,"gap_pct":13.35},{"cc":"CUBIC","pt":3,"rep":1,"sent_pkts":92950,"declared_pct":25.88,"spurious_pct":95.17,"genuine_pct":1.25,"genuine_count":1162,"mbps":33.77,"a_share":8.4,"b_share":12.1,"c_share":79.5,"total_rx_bytes":70301078,"sent_dgrams":58038,"recv_dgrams":54487,"recv_bytes":63313894,"gap_pct":6.12},{"cc":"CUBIC","pt":3,"rep":2,"sent_pkts":108766,"declared_pct":30.83,"spurious_pct":96.46,"genuine_pct":1.091,"genuine_count":1187,"mbps":39.06,"a_share":8.2,"b_share":23.4,"c_share":68.4,"total_rx_bytes":81612095,"sent_dgrams":66203,"recv_dgrams":63034,"recv_bytes":73245508,"gap_pct":4.79},{"cc":"CUBIC","pt":3,"rep":3,"sent_pkts":57676,"declared_pct":21.77,"spurious_pct":90.79,"genuine_pct":2.004,"genuine_count":1156,"mbps":21.8,"a_share":6.0,"b_share":11.2,"c_share":82.7,"total_rx_bytes":45155347,"sent_dgrams":40986,"recv_dgrams":35174,"recv_bytes":40872188,"gap_pct":14.18},{"cc":"CUBIC","pt":3,"rep":4,"sent_pkts":50687,"declared_pct":23.76,"spurious_pct":88.74,"genuine_pct":2.675,"genuine_count":1356,"mbps":18.59,"a_share":6.1,"b_share":7.5,"c_share":86.4,"total_rx_bytes":38648189,"sent_dgrams":32450,"recv_dgrams":30034,"recv_bytes":34899508,"gap_pct":7.45},{"cc":"CUBIC","pt":3,"rep":5,"sent_pkts":101287,"declared_pct":28.08,"spurious_pct":96.59,"genuine_pct":0.957,"genuine_count":969,"mbps":36.29,"a_share":7.7,"b_share":18.5,"c_share":73.7,"total_rx_bytes":75790208,"sent_dgrams":61408,"recv_dgrams":58561,"recv_bytes":68047882,"gap_pct":4.64},{"cc":"CUBIC","pt":5,"rep":1,"sent_pkts":114070,"declared_pct":29.03,"spurious_pct":97.66,"genuine_pct":0.679,"genuine_count":774,"mbps":39.34,"a_share":5.6,"b_share":35.5,"c_share":58.9,"total_rx_bytes":82517270,"sent_dgrams":67133,"recv_dgrams":63466,"recv_bytes":73761248,"gap_pct":5.46},{"cc":"CUBIC","pt":5,"rep":2,"sent_pkts":92141,"declared_pct":17.87,"spurious_pct":94.79,"genuine_pct":0.931,"genuine_count":858,"mbps":34.73,"a_share":5.2,"b_share":17.3,"c_share":77.4,"total_rx_bytes":72100069,"sent_dgrams":60016,"recv_dgrams":56033,"recv_bytes":65119580,"gap_pct":6.64},{"cc":"CUBIC","pt":5,"rep":3,"sent_pkts":75514,"declared_pct":8.59,"spurious_pct":82.58,"genuine_pct":1.496,"genuine_count":1130,"mbps":31.91,"a_share":3.5,"b_share":11.2,"c_share":85.4,"total_rx_bytes":65218839,"sent_dgrams":57571,"recv_dgrams":51500,"recv_bytes":59843000,"gap_pct":10.55},{"cc":"CUBIC","pt":5,"rep":4,"sent_pkts":113190,"declared_pct":28.77,"spurious_pct":99.1,"genuine_pct":0.259,"genuine_count":293,"mbps":40.09,"a_share":5.5,"b_share":29.7,"c_share":64.8,"total_rx_bytes":84030302,"sent_dgrams":67533,"recv_dgrams":64692,"recv_bytes":75172104,"gap_pct":4.21},{"cc":"CUBIC","pt":5,"rep":5,"sent_pkts":105070,"declared_pct":25.69,"spurious_pct":96.78,"genuine_pct":0.827,"genuine_count":869,"mbps":36.76,"a_share":5.3,"b_share":22.3,"c_share":72.4,"total_rx_bytes":77010941,"sent_dgrams":61447,"recv_dgrams":59319,"recv_bytes":68930654,"gap_pct":3.46},{"cc":"CUBIC","pt":10,"rep":1,"sent_pkts":77499,"declared_pct":6.39,"spurious_pct":76.08,"genuine_pct":1.529,"genuine_count":1185,"mbps":31.9,"a_share":3.9,"b_share":11.0,"c_share":85.0,"total_rx_bytes":65464025,"sent_dgrams":63037,"recv_dgrams":51470,"recv_bytes":59808558,"gap_pct":18.35},{"cc":"CUBIC","pt":10,"rep":2,"sent_pkts":118524,"declared_pct":26.14,"spurious_pct":98.01,"genuine_pct":0.52,"genuine_count":616,"mbps":43.67,"a_share":5.6,"b_share":33.4,"c_share":61.0,"total_rx_bytes":91166107,"sent_dgrams":74999,"recv_dgrams":70463,"recv_bytes":81878006,"gap_pct":6.05},{"cc":"CUBIC","pt":10,"rep":3,"sent_pkts":93779,"declared_pct":15.95,"spurious_pct":94.23,"genuine_pct":0.92,"genuine_count":863,"mbps":36.26,"a_share":4.6,"b_share":21.1,"c_share":74.3,"total_rx_bytes":74939120,"sent_dgrams":62027,"recv_dgrams":58510,"recv_bytes":67988620,"gap_pct":5.67},{"cc":"CUBIC","pt":10,"rep":4,"sent_pkts":122096,"declared_pct":30.44,"spurious_pct":98.04,"genuine_pct":0.597,"genuine_count":729,"mbps":42.26,"a_share":5.7,"b_share":41.3,"c_share":53.1,"total_rx_bytes":88861320,"sent_dgrams":71010,"recv_dgrams":68186,"recv_bytes":79232132,"gap_pct":3.98},{"cc":"CUBIC","pt":10,"rep":5,"sent_pkts":29655,"declared_pct":15.36,"spurious_pct":85.23,"genuine_pct":2.269,"genuine_count":673,"mbps":14.11,"a_share":8.3,"b_share":13.1,"c_share":78.6,"total_rx_bytes":28600262,"sent_dgrams":26173,"recv_dgrams":22768,"recv_bytes":26458278,"gap_pct":13.01},{"cc":"CUBIC","pt":15,"rep":1,"sent_pkts":108482,"declared_pct":18.79,"spurious_pct":97.38,"genuine_pct":0.492,"genuine_count":534,"mbps":43.47,"a_share":5.1,"b_share":33.0,"c_share":62.0,"total_rx_bytes":90287440,"sent_dgrams":74998,"recv_dgrams":70136,"recv_bytes":81511978,"gap_pct":6.48},{"cc":"CUBIC","pt":15,"rep":2,"sent_pkts":132503,"declared_pct":29.7,"spurious_pct":98.62,"genuine_pct":0.41,"genuine_count":543,"mbps":45.71,"a_share":5.7,"b_share":42.0,"c_share":52.3,"total_rx_bytes":96086907,"sent_dgrams":74996,"recv_dgrams":73753,"recv_bytes":85700986,"gap_pct":1.66},{"cc":"CUBIC","pt":15,"rep":3,"sent_pkts":102093,"declared_pct":20.73,"spurious_pct":89.92,"genuine_pct":2.089,"genuine_count":2133,"mbps":38.8,"a_share":4.9,"b_share":26.0,"c_share":69.1,"total_rx_bytes":80613157,"sent_dgrams":67934,"recv_dgrams":62606,"recv_bytes":72758546,"gap_pct":7.84},{"cc":"CUBIC","pt":15,"rep":4,"sent_pkts":127439,"declared_pct":34.69,"spurious_pct":98.86,"genuine_pct":0.395,"genuine_count":504,"mbps":45.06,"a_share":8.0,"b_share":48.9,"c_share":43.1,"total_rx_bytes":94289248,"sent_dgrams":74996,"recv_dgrams":72704,"recv_bytes":84482048,"gap_pct":3.06},{"cc":"CUBIC","pt":15,"rep":5,"sent_pkts":93084,"declared_pct":10.4,"spurious_pct":94.68,"genuine_pct":0.553,"genuine_count":515,"mbps":37.89,"a_share":4.3,"b_share":24.5,"c_share":71.2,"total_rx_bytes":78179275,"sent_dgrams":65845,"recv_dgrams":61138,"recv_bytes":71042356,"gap_pct":7.15},{"cc":"CUBIC","pt":20,"rep":1,"sent_pkts":121452,"declared_pct":22.52,"spurious_pct":97.08,"genuine_pct":0.657,"genuine_count":798,"mbps":42.03,"a_share":5.3,"b_share":39.8,"c_share":54.9,"total_rx_bytes":88184730,"sent_dgrams":71288,"recv_dgrams":67783,"recv_bytes":78813930,"gap_pct":4.92},{"cc":"CUBIC","pt":20,"rep":2,"sent_pkts":129594,"declared_pct":33.3,"spurious_pct":99.27,"genuine_pct":0.242,"genuine_count":313,"mbps":45.86,"a_share":7.2,"b_share":45.7,"c_share":47.1,"total_rx_bytes":95983464,"sent_dgrams":74998,"recv_dgrams":73997,"recv_bytes":85987744,"gap_pct":1.33},{"cc":"CUBIC","pt":20,"rep":3,"sent_pkts":131013,"declared_pct":29.14,"spurious_pct":99.14,"genuine_pct":0.25,"genuine_count":327,"mbps":45.41,"a_share":6.0,"b_share":35.8,"c_share":58.2,"total_rx_bytes":95479444,"sent_dgrams":74996,"recv_dgrams":73278,"recv_bytes":85149720,"gap_pct":2.29},{"cc":"CUBIC","pt":20,"rep":4,"sent_pkts":109248,"declared_pct":25.32,"spurious_pct":95.91,"genuine_pct":1.036,"genuine_count":1132,"mbps":40.72,"a_share":5.2,"b_share":34.5,"c_share":60.4,"total_rx_bytes":84759643,"sent_dgrams":69321,"recv_dgrams":65710,"recv_bytes":76355020,"gap_pct":5.21},{"cc":"CUBIC","pt":20,"rep":5,"sent_pkts":88833,"declared_pct":11.76,"spurious_pct":84.47,"genuine_pct":1.826,"genuine_count":1622,"mbps":34.71,"a_share":5.7,"b_share":16.7,"c_share":77.6,"total_rx_bytes":71853145,"sent_dgrams":65574,"recv_dgrams":56010,"recv_bytes":65083620,"gap_pct":14.59},{"cc":"CUBIC","pt":25,"rep":1,"sent_pkts":31832,"declared_pct":4.93,"spurious_pct":95.41,"genuine_pct":0.226,"genuine_count":72,"mbps":12.93,"a_share":7.4,"b_share":16.0,"c_share":76.6,"total_rx_bytes":26804574,"sent_dgrams":67943,"recv_dgrams":20856,"recv_bytes":24239802,"gap_pct":69.3},{"cc":"CUBIC","pt":25,"rep":2,"sent_pkts":126898,"declared_pct":22.73,"spurious_pct":96.36,"genuine_pct":0.827,"genuine_count":1049,"mbps":43.96,"a_share":7.4,"b_share":32.0,"c_share":60.6,"total_rx_bytes":92245419,"sent_dgrams":74386,"recv_dgrams":70918,"recv_bytes":82434608,"gap_pct":4.66},{"cc":"CUBIC","pt":25,"rep":3,"sent_pkts":120614,"declared_pct":22.02,"spurious_pct":96.65,"genuine_pct":0.738,"genuine_count":890,"mbps":41.31,"a_share":5.5,"b_share":37.7,"c_share":56.8,"total_rx_bytes":86893108,"sent_dgrams":68871,"recv_dgrams":66666,"recv_bytes":77466006,"gap_pct":3.2},{"cc":"CUBIC","pt":25,"rep":4,"sent_pkts":108839,"declared_pct":15.51,"spurious_pct":87.12,"genuine_pct":1.997,"genuine_count":2174,"mbps":40.12,"a_share":4.8,"b_share":28.3,"c_share":66.9,"total_rx_bytes":83587971,"sent_dgrams":70070,"recv_dgrams":64729,"recv_bytes":75217948,"gap_pct":7.62},{"cc":"CUBIC","pt":25,"rep":5,"sent_pkts":129903,"declared_pct":26.22,"spurious_pct":95.68,"genuine_pct":1.133,"genuine_count":1472,"mbps":44.88,"a_share":5.5,"b_share":35.5,"c_share":58.9,"total_rx_bytes":94376078,"sent_dgrams":74999,"recv_dgrams":72417,"recv_bytes":84148554,"gap_pct":3.44},{"cc":"CUBIC","pt":30,"rep":1,"sent_pkts":109948,"declared_pct":20.71,"spurious_pct":96.89,"genuine_pct":0.644,"genuine_count":708,"mbps":39.53,"a_share":5.2,"b_share":44.0,"c_share":50.8,"total_rx_bytes":82715342,"sent_dgrams":67265,"recv_dgrams":63773,"recv_bytes":74112700,"gap_pct":5.19},{"cc":"CUBIC","pt":30,"rep":2,"sent_pkts":75637,"declared_pct":10.94,"spurious_pct":92.59,"genuine_pct":0.81,"genuine_count":613,"mbps":32.33,"a_share":4.4,"b_share":11.6,"c_share":84.0,"total_rx_bytes":66373613,"sent_dgrams":57324,"recv_dgrams":52177,"recv_bytes":60629674,"gap_pct":8.98},{"cc":"CUBIC","pt":30,"rep":3,"sent_pkts":80841,"declared_pct":21.67,"spurious_pct":98.86,"genuine_pct":0.247,"genuine_count":200,"mbps":30.13,"a_share":5.6,"b_share":40.5,"c_share":54.0,"total_rx_bytes":62827480,"sent_dgrams":73978,"recv_dgrams":48617,"recv_bytes":56502416,"gap_pct":34.28},{"cc":"CUBIC","pt":30,"rep":4,"sent_pkts":88155,"declared_pct":10.51,"spurious_pct":84.9,"genuine_pct":1.587,"genuine_count":1399,"mbps":33.85,"a_share":4.4,"b_share":16.2,"c_share":79.4,"total_rx_bytes":70110936,"sent_dgrams":59927,"recv_dgrams":54629,"recv_bytes":63478898,"gap_pct":8.84},{"cc":"CUBIC","pt":30,"rep":5,"sent_pkts":129663,"declared_pct":28.68,"spurious_pct":98.67,"genuine_pct":0.383,"genuine_count":496,"mbps":44.73,"a_share":7.3,"b_share":33.3,"c_share":59.5,"total_rx_bytes":94077725,"sent_dgrams":74999,"recv_dgrams":72169,"recv_bytes":83868054,"gap_pct":3.77},{"cc":"CUBIC","pt":40,"rep":1,"sent_pkts":129648,"declared_pct":23.63,"spurious_pct":95.32,"genuine_pct":1.106,"genuine_count":1434,"mbps":44.5,"a_share":5.6,"b_share":35.2,"c_share":59.3,"total_rx_bytes":93587478,"sent_dgrams":74998,"recv_dgrams":71791,"recv_bytes":83436038,"gap_pct":4.28},{"cc":"CUBIC","pt":40,"rep":2,"sent_pkts":131999,"declared_pct":30.81,"spurious_pct":99.35,"genuine_pct":0.2,"genuine_count":264,"mbps":45.37,"a_share":9.5,"b_share":35.9,"c_share":54.6,"total_rx_bytes":95494708,"sent_dgrams":74994,"recv_dgrams":73213,"recv_bytes":85073506,"gap_pct":2.37},{"cc":"CUBIC","pt":40,"rep":3,"sent_pkts":104347,"declared_pct":20.82,"spurious_pct":96.75,"genuine_pct":0.677,"genuine_count":706,"mbps":38.32,"a_share":5.2,"b_share":57.0,"c_share":37.7,"total_rx_bytes":79899120,"sent_dgrams":67813,"recv_dgrams":61838,"recv_bytes":71855756,"gap_pct":8.81},{"cc":"CUBIC","pt":40,"rep":4,"sent_pkts":129133,"declared_pct":25.42,"spurious_pct":94.38,"genuine_pct":1.43,"genuine_count":1846,"mbps":44.71,"a_share":5.6,"b_share":35.1,"c_share":59.3,"total_rx_bytes":94032555,"sent_dgrams":74995,"recv_dgrams":72150,"recv_bytes":83838300,"gap_pct":3.79},{"cc":"CUBIC","pt":40,"rep":5,"sent_pkts":119832,"declared_pct":23.46,"spurious_pct":96.72,"genuine_pct":0.769,"genuine_count":922,"mbps":42.11,"a_share":5.3,"b_share":44.5,"c_share":50.2,"total_rx_bytes":88195949,"sent_dgrams":71071,"recv_dgrams":67937,"recv_bytes":78950052,"gap_pct":4.41},{"cc":"NEWRENO","pt":3,"rep":1,"sent_pkts":6964,"declared_pct":6.29,"spurious_pct":79.68,"genuine_pct":1.278,"genuine_count":89,"mbps":3.45,"a_share":14.1,"b_share":24.9,"c_share":61.0,"total_rx_bytes":7000068,"sent_dgrams":9047,"recv_dgrams":5496,"recv_bytes":6471928,"gap_pct":39.25},{"cc":"NEWRENO","pt":3,"rep":2,"sent_pkts":8881,"declared_pct":6.16,"spurious_pct":73.13,"genuine_pct":1.655,"genuine_count":147,"mbps":4.54,"a_share":13.7,"b_share":22.8,"c_share":63.5,"total_rx_bytes":9172000,"sent_dgrams":9235,"recv_dgrams":7279,"recv_bytes":8506496,"gap_pct":21.18},{"cc":"NEWRENO","pt":3,"rep":3,"sent_pkts":5713,"declared_pct":7.47,"spurious_pct":60.42,"genuine_pct":2.958,"genuine_count":169,"mbps":2.11,"a_share":19.3,"b_share":20.4,"c_share":60.3,"total_rx_bytes":4404699,"sent_dgrams":9065,"recv_dgrams":3408,"recv_bytes":3960096,"gap_pct":62.4},{"cc":"NEWRENO","pt":3,"rep":4,"sent_pkts":9234,"declared_pct":7.89,"spurious_pct":75.72,"genuine_pct":1.917,"genuine_count":177,"mbps":4.12,"a_share":25.2,"b_share":19.8,"c_share":55.0,"total_rx_bytes":8414008,"sent_dgrams":11395,"recv_dgrams":6619,"recv_bytes":7722324,"gap_pct":41.91},{"cc":"NEWRENO","pt":3,"rep":5,"sent_pkts":9315,"declared_pct":7.01,"spurious_pct":76.88,"genuine_pct":1.621,"genuine_count":151,"mbps":4.54,"a_share":14.1,"b_share":23.0,"c_share":62.8,"total_rx_bytes":9188190,"sent_dgrams":9431,"recv_dgrams":7330,"recv_bytes":8517460,"gap_pct":22.28},{"cc":"NEWRENO","pt":5,"rep":1,"sent_pkts":5542,"declared_pct":7.07,"spurious_pct":45.41,"genuine_pct":3.861,"genuine_count":214,"mbps":2.08,"a_share":15.9,"b_share":21.2,"c_share":62.9,"total_rx_bytes":4349905,"sent_dgrams":9000,"recv_dgrams":3274,"recv_bytes":3911396,"gap_pct":63.62},{"cc":"NEWRENO","pt":5,"rep":2,"sent_pkts":8329,"declared_pct":5.4,"spurious_pct":80.89,"genuine_pct":1.033,"genuine_count":86,"mbps":4.34,"a_share":13.2,"b_share":21.6,"c_share":65.2,"total_rx_bytes":8773586,"sent_dgrams":9984,"recv_dgrams":7023,"recv_bytes":8160726,"gap_pct":29.66},{"cc":"NEWRENO","pt":5,"rep":3,"sent_pkts":9791,"declared_pct":6.58,"spurious_pct":74.22,"genuine_pct":1.695,"genuine_count":166,"mbps":4.8,"a_share":13.6,"b_share":21.7,"c_share":64.8,"total_rx_bytes":9721527,"sent_dgrams":10394,"recv_dgrams":7755,"recv_bytes":9011310,"gap_pct":25.39},{"cc":"NEWRENO","pt":5,"rep":4,"sent_pkts":6354,"declared_pct":9.36,"spurious_pct":59.83,"genuine_pct":3.761,"genuine_count":239,"mbps":2.09,"a_share":16.6,"b_share":18.3,"c_share":65.0,"total_rx_bytes":4422569,"sent_dgrams":9622,"recv_dgrams":3344,"recv_bytes":3928288,"gap_pct":65.25},{"cc":"NEWRENO","pt":5,"rep":5,"sent_pkts":8380,"declared_pct":5.33,"spurious_pct":78.52,"genuine_pct":1.146,"genuine_count":96,"mbps":4.4,"a_share":13.7,"b_share":21.9,"c_share":64.4,"total_rx_bytes":8865144,"sent_dgrams":8623,"recv_dgrams":7099,"recv_bytes":8249038,"gap_pct":17.67},{"cc":"NEWRENO","pt":10,"rep":1,"sent_pkts":9743,"declared_pct":6.64,"spurious_pct":71.41,"genuine_pct":1.899,"genuine_count":185,"mbps":5.43,"a_share":11.9,"b_share":20.6,"c_share":67.5,"total_rx_bytes":10915134,"sent_dgrams":10325,"recv_dgrams":8766,"recv_bytes":10186092,"gap_pct":15.1},{"cc":"NEWRENO","pt":10,"rep":2,"sent_pkts":4173,"declared_pct":10.26,"spurious_pct":42.06,"genuine_pct":5.943,"genuine_count":248,"mbps":0.17,"a_share":54.1,"b_share":3.9,"c_share":42.0,"total_rx_bytes":673345,"sent_dgrams":8322,"recv_dgrams":276,"recv_bytes":320712,"gap_pct":96.68},{"cc":"NEWRENO","pt":10,"rep":3,"sent_pkts":11843,"declared_pct":7.53,"spurious_pct":80.49,"genuine_pct":1.469,"genuine_count":174,"mbps":6.06,"a_share":20.9,"b_share":18.1,"c_share":61.0,"total_rx_bytes":12238436,"sent_dgrams":11330,"recv_dgrams":9785,"recv_bytes":11370170,"gap_pct":13.64},{"cc":"NEWRENO","pt":10,"rep":4,"sent_pkts":8681,"declared_pct":5.29,"spurious_pct":82.35,"genuine_pct":0.933,"genuine_count":81,"mbps":4.56,"a_share":12.8,"b_share":19.2,"c_share":68.0,"total_rx_bytes":9191596,"sent_dgrams":12056,"recv_dgrams":7320,"recv_bytes":8553644,"gap_pct":39.28},{"cc":"NEWRENO","pt":10,"rep":5,"sent_pkts":4459,"declared_pct":9.11,"spurious_pct":40.39,"genuine_pct":5.427,"genuine_count":242,"mbps":0.63,"a_share":26.3,"b_share":18.7,"c_share":55.0,"total_rx_bytes":1540261,"sent_dgrams":9067,"recv_dgrams":989,"recv_bytes":1173842,"gap_pct":89.09},{"cc":"NEWRENO","pt":15,"rep":1,"sent_pkts":7955,"declared_pct":6.91,"spurious_pct":65.45,"genuine_pct":2.388,"genuine_count":190,"mbps":3.5,"a_share":15.4,"b_share":19.8,"c_share":64.7,"total_rx_bytes":7159292,"sent_dgrams":10767,"recv_dgrams":5589,"recv_bytes":6563388,"gap_pct":48.09},{"cc":"NEWRENO","pt":15,"rep":2,"sent_pkts":10416,"declared_pct":5.83,"spurious_pct":76.94,"genuine_pct":1.344,"genuine_count":140,"mbps":5.4,"a_share":12.5,"b_share":18.7,"c_share":68.8,"total_rx_bytes":10893843,"sent_dgrams":11464,"recv_dgrams":8710,"recv_bytes":10134320,"gap_pct":24.02},{"cc":"NEWRENO","pt":15,"rep":3,"sent_pkts":9010,"declared_pct":6.12,"spurious_pct":69.15,"genuine_pct":1.887,"genuine_count":170,"mbps":4.07,"a_share":13.8,"b_share":22.6,"c_share":63.5,"total_rx_bytes":8284031,"sent_dgrams":10537,"recv_dgrams":6564,"recv_bytes":7627368,"gap_pct":37.71},{"cc":"NEWRENO","pt":15,"rep":4,"sent_pkts":9873,"declared_pct":5.51,"spurious_pct":84.93,"genuine_pct":0.831,"genuine_count":82,"mbps":5.84,"a_share":21.3,"b_share":18.0,"c_share":60.7,"total_rx_bytes":11690294,"sent_dgrams":12129,"recv_dgrams":9379,"recv_bytes":10948140,"gap_pct":22.67},{"cc":"NEWRENO","pt":15,"rep":5,"sent_pkts":10501,"declared_pct":5.85,"spurious_pct":71.5,"genuine_pct":1.667,"genuine_count":175,"mbps":5.4,"a_share":12.0,"b_share":21.1,"c_share":66.9,"total_rx_bytes":10885406,"sent_dgrams":10961,"recv_dgrams":8711,"recv_bytes":10131568,"gap_pct":20.53},{"cc":"NEWRENO","pt":20,"rep":1,"sent_pkts":10972,"declared_pct":5.98,"spurious_pct":75.46,"genuine_pct":1.467,"genuine_count":161,"mbps":5.52,"a_share":13.2,"b_share":20.0,"c_share":66.7,"total_rx_bytes":11123482,"sent_dgrams":10416,"recv_dgrams":8901,"recv_bytes":10342962,"gap_pct":14.54},{"cc":"NEWRENO","pt":20,"rep":2,"sent_pkts":8830,"declared_pct":5.55,"spurious_pct":73.67,"genuine_pct":1.461,"genuine_count":129,"mbps":4.47,"a_share":12.5,"b_share":21.4,"c_share":66.1,"total_rx_bytes":9037136,"sent_dgrams":10821,"recv_dgrams":7214,"recv_bytes":8387228,"gap_pct":33.33},{"cc":"NEWRENO","pt":20,"rep":3,"sent_pkts":12156,"declared_pct":7.13,"spurious_pct":79.12,"genuine_pct":1.489,"genuine_count":181,"mbps":6.28,"a_share":19.2,"b_share":16.4,"c_share":64.4,"total_rx_bytes":12692628,"sent_dgrams":13429,"recv_dgrams":10139,"recv_bytes":11782316,"gap_pct":24.5},{"cc":"NEWRENO","pt":20,"rep":4,"sent_pkts":4422,"declared_pct":10.18,"spurious_pct":38.22,"genuine_pct":6.287,"genuine_count":278,"mbps":0.62,"a_share":26.1,"b_share":16.4,"c_share":57.5,"total_rx_bytes":1538999,"sent_dgrams":8292,"recv_dgrams":991,"recv_bytes":1172784,"gap_pct":88.05},{"cc":"NEWRENO","pt":20,"rep":5,"sent_pkts":4762,"declared_pct":8.95,"spurious_pct":49.77,"genuine_pct":4.494,"genuine_count":214,"mbps":0.59,"a_share":24.4,"b_share":31.4,"c_share":44.1,"total_rx_bytes":1498314,"sent_dgrams":8684,"recv_dgrams":928,"recv_bytes":1103302,"gap_pct":89.31},{"cc":"NEWRENO","pt":25,"rep":1,"sent_pkts":10304,"declared_pct":6.05,"spurious_pct":73.84,"genuine_pct":1.582,"genuine_count":163,"mbps":5.26,"a_share":13.4,"b_share":18.8,"c_share":67.8,"total_rx_bytes":10643824,"sent_dgrams":9991,"recv_dgrams":8508,"recv_bytes":9886296,"gap_pct":14.84},{"cc":"NEWRENO","pt":25,"rep":2,"sent_pkts":5620,"declared_pct":8.08,"spurious_pct":53.96,"genuine_pct":3.719,"genuine_count":209,"mbps":1.39,"a_share":18.8,"b_share":15.4,"c_share":65.9,"total_rx_bytes":3062343,"sent_dgrams":8415,"recv_dgrams":2189,"recv_bytes":2615932,"gap_pct":73.99},{"cc":"NEWRENO","pt":25,"rep":3,"sent_pkts":4506,"declared_pct":9.5,"spurious_pct":47.43,"genuine_pct":4.993,"genuine_count":225,"mbps":0.63,"a_share":26.0,"b_share":22.5,"c_share":51.5,"total_rx_bytes":1560630,"sent_dgrams":8556,"recv_dgrams":1001,"recv_bytes":1187824,"gap_pct":88.3},{"cc":"NEWRENO","pt":25,"rep":4,"sent_pkts":8304,"declared_pct":9.1,"spurious_pct":63.36,"genuine_pct":3.336,"genuine_count":277,"mbps":3.37,"a_share":23.5,"b_share":22.2,"c_share":54.3,"total_rx_bytes":6955827,"sent_dgrams":13079,"recv_dgrams":5374,"recv_bytes":6312988,"gap_pct":58.91},{"cc":"NEWRENO","pt":25,"rep":5,"sent_pkts":11420,"declared_pct":6.94,"spurious_pct":77.55,"genuine_pct":1.559,"genuine_count":178,"mbps":5.96,"a_share":20.5,"b_share":15.8,"c_share":63.8,"total_rx_bytes":12022249,"sent_dgrams":12349,"recv_dgrams":9607,"recv_bytes":11172720,"gap_pct":22.2},{"cc":"NEWRENO","pt":30,"rep":1,"sent_pkts":4489,"declared_pct":8.29,"spurious_pct":41.4,"genuine_pct":4.856,"genuine_count":218,"mbps":0.62,"a_share":23.0,"b_share":26.1,"c_share":50.9,"total_rx_bytes":1541156,"sent_dgrams":8397,"recv_dgrams":983,"recv_bytes":1169948,"gap_pct":88.29},{"cc":"NEWRENO","pt":30,"rep":2,"sent_pkts":7385,"declared_pct":6.82,"spurious_pct":71.63,"genuine_pct":1.936,"genuine_count":143,"mbps":3.43,"a_share":14.7,"b_share":19.3,"c_share":65.9,"total_rx_bytes":6986870,"sent_dgrams":9783,"recv_dgrams":5464,"recv_bytes":6432236,"gap_pct":44.15},{"cc":"NEWRENO","pt":30,"rep":3,"sent_pkts":9887,"declared_pct":6.56,"spurious_pct":72.11,"genuine_pct":1.831,"genuine_count":181,"mbps":5.09,"a_share":12.5,"b_share":23.5,"c_share":64.0,"total_rx_bytes":10262851,"sent_dgrams":9755,"recv_dgrams":8214,"recv_bytes":9544668,"gap_pct":15.8},{"cc":"NEWRENO","pt":30,"rep":4,"sent_pkts":9163,"declared_pct":5.03,"spurious_pct":78.74,"genuine_pct":1.07,"genuine_count":98,"mbps":4.89,"a_share":12.3,"b_share":23.0,"c_share":64.6,"total_rx_bytes":9835651,"sent_dgrams":11183,"recv_dgrams":7812,"recv_bytes":9165362,"gap_pct":30.14},{"cc":"NEWRENO","pt":30,"rep":5,"sent_pkts":10278,"declared_pct":6.4,"spurious_pct":73.71,"genuine_pct":1.683,"genuine_count":173,"mbps":5.2,"a_share":11.6,"b_share":21.4,"c_share":66.9,"total_rx_bytes":10486257,"sent_dgrams":10703,"recv_dgrams":8341,"recv_bytes":9746012,"gap_pct":22.07},{"cc":"NEWRENO","pt":40,"rep":1,"sent_pkts":7442,"declared_pct":7.03,"spurious_pct":63.29,"genuine_pct":2.58,"genuine_count":192,"mbps":3.04,"a_share":14.7,"b_share":22.1,"c_share":63.2,"total_rx_bytes":6254866,"sent_dgrams":10274,"recv_dgrams":4843,"recv_bytes":5696042,"gap_pct":52.86},{"cc":"NEWRENO","pt":40,"rep":2,"sent_pkts":10194,"declared_pct":6.64,"spurious_pct":72.67,"genuine_pct":1.815,"genuine_count":185,"mbps":5.11,"a_share":12.3,"b_share":19.6,"c_share":68.1,"total_rx_bytes":10321488,"sent_dgrams":10608,"recv_dgrams":8248,"recv_bytes":9589686,"gap_pct":22.25},{"cc":"NEWRENO","pt":40,"rep":3,"sent_pkts":9772,"declared_pct":6.01,"spurious_pct":80.58,"genuine_pct":1.167,"genuine_count":114,"mbps":4.82,"a_share":12.1,"b_share":22.8,"c_share":65.2,"total_rx_bytes":9751401,"sent_dgrams":10504,"recv_dgrams":7780,"recv_bytes":9040360,"gap_pct":25.93},{"cc":"NEWRENO","pt":40,"rep":4,"sent_pkts":9152,"declared_pct":5.42,"spurious_pct":77.62,"genuine_pct":1.213,"genuine_count":111,"mbps":4.84,"a_share":12.4,"b_share":19.2,"c_share":68.4,"total_rx_bytes":9750835,"sent_dgrams":10463,"recv_dgrams":7796,"recv_bytes":9081942,"gap_pct":25.49},{"cc":"NEWRENO","pt":40,"rep":5,"sent_pkts":10176,"declared_pct":5.56,"spurious_pct":81.63,"genuine_pct":1.022,"genuine_count":104,"mbps":5.26,"a_share":12.1,"b_share":23.2,"c_share":64.7,"total_rx_bytes":10596507,"sent_dgrams":11534,"recv_dgrams":8490,"recv_bytes":9865380,"gap_pct":26.39}]};
+const RUNS = DATA.runs;
+const CCS = DATA.meta.ccs;
+const PTS = DATA.meta.thresholds;
+const CC_COLOR = { BBR: 'var(--bbr)', CUBIC: 'var(--cubic)', NEWRENO: 'var(--newreno)' };
+const CC_BAND  = { BBR: 'var(--band-bbr)', CUBIC: 'var(--band-cubic)', NEWRENO: 'var(--band-newreno)' };
+const CC_LABEL = { BBR: 'BBR', CUBIC: 'CUBIC', NEWRENO: 'NewReno' };
+const cssv = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function resolveColor(v) {
+  if (v.startsWith('var(')) return cssv(v.slice(4, -1));
+  return v;
+}
+
+// ---------- aggregation helpers ----------
+function groupBy(rows, keyFn) {
+  const m = new Map();
+  for (const r of rows) {
+    const k = keyFn(r);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(r);
+  }
+  return m;
+}
+function mean(arr) { return arr.reduce((a,b)=>a+b,0) / arr.length; }
+function fmt1(v) { return v.toFixed(1); }
+function fmt2(v) { return v.toFixed(2); }
+
+function seriesFor(cc, field) {
+  return PTS.map(pt => {
+    const rows = RUNS.filter(r => r.cc === cc && r.pt === pt);
+    const vals = rows.map(r => r[field]);
+    return { pt, mean: mean(vals), min: Math.min(...vals), max: Math.max(...vals), n: vals.length };
+  });
+}
+
+// ---------- tooltip ----------
+const tip = document.getElementById('tooltip');
+function showTip(x, y, html) {
+  tip.innerHTML = html;
+  tip.style.opacity = 1;
+  const r = tip.getBoundingClientRect();
+  let left = x + 14, top = y - r.height - 10;
+  if (left + r.width > window.innerWidth - 8) left = x - r.width - 14;
+  if (top < 8) top = y + 14;
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+function hideTip() { tip.style.opacity = 0; }
+
+// ---------- line chart (small multiple) ----------
+function drawLineChart(mount, { series, color, band, valueFmt, yTicks, height, unit }) {
+  const W = 340, H = height || 190;
+  const M = { top: 10, right: 10, bottom: 24, left: 34 };
+  const iw = W - M.left - M.right, ih = H - M.top - M.bottom;
+  const xs = series.map((d,i)=> M.left + (iw * i / (series.length - 1)));
+  const yMax = Math.max(...series.map(d=>d.max)) * 1.12;
+  const yMin = Math.min(0, Math.min(...series.map(d=>d.min)));
+  const y = (v) => M.top + ih - ((v - yMin) / (yMax - yMin || 1)) * ih;
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('class', 'chart');
+  svg.setAttribute('role', 'img');
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const g = document.createElementNS(ns, 'g');
+  svg.appendChild(g);
+
+  // gridlines + y ticks
+  const ticks = yTicks || 4;
+  for (let t = 0; t <= ticks; t++) {
+    const v = yMin + (yMax - yMin) * t / ticks;
+    const yy = y(v);
+    const line = document.createElementNS(ns,'line');
+    line.setAttribute('x1', M.left); line.setAttribute('x2', W - M.right);
+    line.setAttribute('y1', yy); line.setAttribute('y2', yy);
+    line.setAttribute('class', 'gridline');
+    g.appendChild(line);
+    const lbl = document.createElementNS(ns,'text');
+    lbl.setAttribute('x', M.left - 6); lbl.setAttribute('y', yy + 3);
+    lbl.setAttribute('text-anchor','end'); lbl.setAttribute('class','axis-label');
+    lbl.textContent = valueFmt ? valueFmt(v) : Math.round(v);
+    g.appendChild(lbl);
+  }
+  // baseline
+  const base = document.createElementNS(ns,'line');
+  base.setAttribute('x1', M.left); base.setAttribute('x2', W - M.right);
+  base.setAttribute('y1', y(Math.max(yMin,0))); base.setAttribute('y2', y(Math.max(yMin,0)));
+  base.setAttribute('class', 'baseline');
+  g.appendChild(base);
+
+  // x labels
+  series.forEach((d,i) => {
+    const lbl = document.createElementNS(ns,'text');
+    lbl.setAttribute('x', xs[i]); lbl.setAttribute('y', H - 6);
+    lbl.setAttribute('text-anchor','middle'); lbl.setAttribute('class','axis-label');
+    lbl.textContent = d.pt;
+    g.appendChild(lbl);
+  });
+
+  const col = resolveColor(color);
+
+  if (band) {
+    const top = series.map((d,i)=> `${i===0?'M':'L'} ${xs[i]} ${y(d.max)}`).join(' ');
+    const bot = series.map((d,i)=> ({ x: xs[i], y: y(d.min) })).reverse()
+      .map(p => `L ${p.x} ${p.y}`).join(' ');
+    const path = document.createElementNS(ns,'path');
+    path.setAttribute('d', `${top} ${bot} Z`);
+    path.setAttribute('fill', resolveColor(band));
+    path.setAttribute('class','band');
+    g.appendChild(path);
+  }
+
+  // mean line
+  const dPath = series.map((d,i)=> `${i===0?'M':'L'} ${xs[i]} ${y(d.mean)}`).join(' ');
+  const path = document.createElementNS(ns,'path');
+  path.setAttribute('d', dPath);
+  path.setAttribute('stroke', col);
+  path.setAttribute('class','line-mean');
+  g.appendChild(path);
+
+  // dots + hover targets
+  series.forEach((d,i) => {
+    const dot = document.createElementNS(ns,'circle');
+    dot.setAttribute('cx', xs[i]); dot.setAttribute('cy', y(d.mean)); dot.setAttribute('r', 3.4);
+    dot.setAttribute('fill', col); dot.setAttribute('class','dot');
+    g.appendChild(dot);
+
+    const hitW = iw / series.length;
+    const hit = document.createElementNS(ns,'rect');
+    hit.setAttribute('x', xs[i] - hitW/2); hit.setAttribute('y', M.top);
+    hit.setAttribute('width', hitW); hit.setAttribute('height', ih);
+    hit.setAttribute('fill', 'transparent');
+    hit.addEventListener('mousemove', (e) => {
+      dot.setAttribute('r', 5);
+      showTip(e.clientX, e.clientY, `<div class="row"><span class="k">pt</span><b>${d.pt}</b></div>` +
+        `<div class="row"><span class="k">mean</span><b>${valueFmt?valueFmt(d.mean):fmt1(d.mean)}${unit||''}</b></div>` +
+        `<div class="row"><span class="k">range</span><b>${valueFmt?valueFmt(d.min):fmt1(d.min)}&ndash;${valueFmt?valueFmt(d.max):fmt1(d.max)}${unit||''}</b></div>` +
+        `<div class="row"><span class="k">n</span><b>${d.n}</b></div>`);
+    });
+    hit.addEventListener('mouseleave', () => { dot.setAttribute('r', 3.4); hideTip(); });
+    g.appendChild(hit);
+  });
+
+  mount.appendChild(svg);
+}
+
+// ---------- multi-series line chart (shared axis) ----------
+function drawMultiLine(mount, { seriesMap, valueFmt, unit, height }) {
+  const W = 480, H = height || 210;
+  const M = { top: 12, right: 14, bottom: 26, left: 40 };
+  const iw = W - M.left - M.right, ih = H - M.top - M.bottom;
+  const ns = 'http://www.w3.org/2000/svg';
+  const allVals = Object.values(seriesMap).flatMap(s => s.map(d=>d.mean));
+  const yMax = Math.max(...allVals) * 1.2;
+  const yMin = 0;
+  const xs = (i, len) => M.left + (iw * i / (len - 1));
+  const y = (v) => M.top + ih - ((v - yMin) / (yMax - yMin || 1)) * ih;
+
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('class', 'chart');
+  const g = document.createElementNS(ns,'g');
+  svg.appendChild(g);
+
+  const ticks = 4;
+  for (let t = 0; t <= ticks; t++) {
+    const v = yMax * t / ticks;
+    const yy = y(v);
+    const line = document.createElementNS(ns,'line');
+    line.setAttribute('x1', M.left); line.setAttribute('x2', W - M.right);
+    line.setAttribute('y1', yy); line.setAttribute('y2', yy);
+    line.setAttribute('class','gridline');
+    g.appendChild(line);
+    const lbl = document.createElementNS(ns,'text');
+    lbl.setAttribute('x', M.left-6); lbl.setAttribute('y', yy+3);
+    lbl.setAttribute('text-anchor','end'); lbl.setAttribute('class','axis-label');
+    lbl.textContent = (valueFmt?valueFmt(v):fmt1(v));
+    g.appendChild(lbl);
+  }
+  const base = document.createElementNS(ns,'line');
+  base.setAttribute('x1', M.left); base.setAttribute('x2', W-M.right);
+  base.setAttribute('y1', y(0)); base.setAttribute('y2', y(0));
+  base.setAttribute('class','baseline');
+  g.appendChild(base);
+
+  const firstSeries = Object.values(seriesMap)[0];
+  firstSeries.forEach((d,i) => {
+    const lbl = document.createElementNS(ns,'text');
+    lbl.setAttribute('x', xs(i, firstSeries.length)); lbl.setAttribute('y', H-6);
+    lbl.setAttribute('text-anchor','middle'); lbl.setAttribute('class','axis-label');
+    lbl.textContent = d.pt;
+    g.appendChild(lbl);
+  });
+
+  for (const [cc, series] of Object.entries(seriesMap)) {
+    const col = resolveColor(CC_COLOR[cc]);
+    const dPath = series.map((d,i)=> `${i===0?'M':'L'} ${xs(i,series.length)} ${y(d.mean)}`).join(' ');
+    const path = document.createElementNS(ns,'path');
+    path.setAttribute('d', dPath); path.setAttribute('stroke', col); path.setAttribute('class','line-mean');
+    g.appendChild(path);
+    series.forEach((d,i) => {
+      const cx = xs(i,series.length), cy = y(d.mean);
+      const dot = document.createElementNS(ns,'circle');
+      dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', 3);
+      dot.setAttribute('fill', col); dot.setAttribute('class','dot');
+      g.appendChild(dot);
+      const hitW = iw / series.length;
+      const hit = document.createElementNS(ns,'rect');
+      hit.setAttribute('x', cx - hitW/2); hit.setAttribute('y', M.top);
+      hit.setAttribute('width', hitW); hit.setAttribute('height', ih);
+      hit.setAttribute('fill','transparent');
+      hit.addEventListener('mousemove', (e) => {
+        dot.setAttribute('r', 5);
+        showTip(e.clientX, e.clientY, `<div class="row"><span class="k">${CC_LABEL[cc]} &middot; pt</span><b>${d.pt}</b></div>` +
+          `<div class="row"><span class="k">genuine loss</span><b>${(valueFmt?valueFmt(d.mean):fmt2(d.mean))}${unit||''}</b></div>`);
+      });
+      hit.addEventListener('mouseleave', () => { dot.setAttribute('r', 3); hideTip(); });
+      g.appendChild(hit);
+    });
+  }
+  mount.appendChild(svg);
+}
+
+// ---------- grouped bar chart ----------
+function drawGroupedBar(mount, { groups, seriesNames, seriesColors, seriesLabels, valueFmt, unit, height }) {
+  const W = 480, H = height || 210;
+  const M = { top: 14, right: 10, bottom: 30, left: 40 };
+  const iw = W - M.left - M.right, ih = H - M.top - M.bottom;
+  const ns = 'http://www.w3.org/2000/svg';
+  const allVals = groups.flatMap(gr => seriesNames.map(sn => gr.values[sn]));
+  const yMax = Math.max(...allVals) * 1.2;
+  const y = (v) => M.top + ih - (v / yMax) * ih;
+
+  const svg = document.createElementNS(ns,'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('class','chart');
+  const g = document.createElementNS(ns,'g');
+  svg.appendChild(g);
+
+  const ticks = 4;
+  for (let t = 0; t <= ticks; t++) {
+    const v = yMax * t / ticks;
+    const yy = y(v);
+    const line = document.createElementNS(ns,'line');
+    line.setAttribute('x1', M.left); line.setAttribute('x2', W-M.right);
+    line.setAttribute('y1', yy); line.setAttribute('y2', yy);
+    line.setAttribute('class','gridline');
+    g.appendChild(line);
+    const lbl = document.createElementNS(ns,'text');
+    lbl.setAttribute('x', M.left-6); lbl.setAttribute('y', yy+3);
+    lbl.setAttribute('text-anchor','end'); lbl.setAttribute('class','axis-label');
+    lbl.textContent = (valueFmt?valueFmt(v):Math.round(v));
+    g.appendChild(lbl);
+  }
+  const base = document.createElementNS(ns,'line');
+  base.setAttribute('x1', M.left); base.setAttribute('x2', W-M.right);
+  base.setAttribute('y1', y(0)); base.setAttribute('y2', y(0));
+  base.setAttribute('class','baseline');
+  g.appendChild(base);
+
+  const groupW = iw / groups.length;
+  const barPad = 10;
+  const barW = (groupW - barPad*2) / seriesNames.length;
+
+  groups.forEach((gr, gi) => {
+    const gx = M.left + gi*groupW;
+    const catLbl = document.createElementNS(ns,'text');
+    catLbl.setAttribute('x', gx + groupW/2); catLbl.setAttribute('y', H-8);
+    catLbl.setAttribute('text-anchor','middle'); catLbl.setAttribute('class','bar-cat-label');
+    catLbl.textContent = gr.label;
+    g.appendChild(catLbl);
+
+    seriesNames.forEach((sn, si) => {
+      const v = gr.values[sn];
+      const bx = gx + barPad + si*barW;
+      const bh = ih - (y(v) - M.top);
+      const rect = document.createElementNS(ns,'rect');
+      rect.setAttribute('x', bx); rect.setAttribute('y', y(v));
+      rect.setAttribute('width', barW - 3); rect.setAttribute('height', Math.max(bh,1));
+      rect.setAttribute('rx', 3);
+      rect.setAttribute('fill', resolveColor(seriesColors[si]));
+      rect.setAttribute('class', 'bar-hover');
+      rect.addEventListener('mousemove', (e) => {
+        showTip(e.clientX, e.clientY, `<div class="row"><span class="k">${gr.label} &middot; ${seriesLabels[si]}</span></div>` +
+          `<div class="row"><b>${(valueFmt?valueFmt(v):fmt2(v))}${unit||''}</b></div>`);
+      });
+      rect.addEventListener('mouseleave', hideTip);
+      g.appendChild(rect);
+
+      const vlbl = document.createElementNS(ns,'text');
+      vlbl.setAttribute('x', bx + (barW-3)/2); vlbl.setAttribute('y', y(v) - 5);
+      vlbl.setAttribute('text-anchor','middle'); vlbl.setAttribute('class','bar-label');
+      vlbl.textContent = (valueFmt?valueFmt(v):fmt1(v));
+      g.appendChild(vlbl);
+    });
+  });
+
+  mount.appendChild(svg);
+}
+
+// ---------- stacked bar chart (path shares) ----------
+function drawStackedBar(mount, { groups, segments, segColors, height }) {
+  const W = 480, H = height || 210;
+  const M = { top: 14, right: 10, bottom: 26, left: 8 };
+  const iw = W - M.left - M.right, ih = H - M.top - M.bottom;
+  const ns = 'http://www.w3.org/2000/svg';
+  const barH = Math.min(46, ih / groups.length - 14);
+  const gap = ih / groups.length;
+
+  const svg = document.createElementNS(ns,'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('class','chart');
+  const g = document.createElementNS(ns,'g');
+  svg.appendChild(g);
+
+  groups.forEach((gr, gi) => {
+    const cy = M.top + gap*gi + gap/2 - barH/2;
+    const lbl = document.createElementNS(ns,'text');
+    lbl.setAttribute('x', M.left); lbl.setAttribute('y', cy - 6);
+    lbl.setAttribute('class','panel-title'); lbl.setAttribute('style','font-size:11.5px;font-weight:600;fill:var(--ink)');
+    lbl.textContent = gr.label;
+    g.appendChild(lbl);
+
+    let x = M.left;
+    segments.forEach((seg, si) => {
+      const v = gr.values[seg];
+      const segW = (v/100) * iw;
+      const rect = document.createElementNS(ns,'rect');
+      rect.setAttribute('x', x + 1); rect.setAttribute('y', cy);
+      rect.setAttribute('width', Math.max(segW - 2, 0)); rect.setAttribute('height', barH);
+      rect.setAttribute('rx', 3);
+      rect.setAttribute('fill', resolveColor(segColors[si]));
+      rect.setAttribute('class','bar-hover');
+      rect.addEventListener('mousemove', (e) => {
+        showTip(e.clientX, e.clientY, `<div class="row"><span class="k">${gr.label} &middot; ${seg}</span><b>${fmt1(v)}%</b></div>`);
+      });
+      rect.addEventListener('mouseleave', hideTip);
+      g.appendChild(rect);
+      if (segW > 26) {
+        const vlbl = document.createElementNS(ns,'text');
+        vlbl.setAttribute('x', x + segW/2); vlbl.setAttribute('y', cy + barH/2 + 4);
+        vlbl.setAttribute('text-anchor','middle');
+        vlbl.setAttribute('style','font-size:11px;font-weight:600;font-family:"IBM Plex Mono",monospace;fill:#fff;pointer-events:none');
+        vlbl.textContent = Math.round(v) + '%';
+        g.appendChild(vlbl);
+      }
+      x += segW;
+    });
+  });
+
+  mount.appendChild(svg);
+}
+
+// ---------- build KPIs ----------
+function buildKpis() {
+  const mount = document.getElementById('kpis');
+  const genuineAll = mean(RUNS.map(r=>r.genuine_pct));
+  const spuriousAll = mean(RUNS.map(r=>r.spurious_pct));
+  const meshDominant = RUNS.filter(r => r.c_share > r.a_share && r.c_share > r.b_share).length;
+  const mbpsByCC = CCS.map(cc => ({ cc, v: mean(RUNS.filter(r=>r.cc===cc).map(r=>r.mbps)) }));
+  const best = mbpsByCC.reduce((a,b)=> b.v > a.v ? b : a);
+
+  const tiles = [
+    { label: 'Runs analyzed', value: RUNS.length, foot: `${CCS.length} CC &times; ${PTS.length} thresholds &times; 5 reps` },
+    { label: 'Mean genuine loss', value: fmt2(genuineAll) + '%', foot: 'real &amp; unrecoverable (no retransmit)' },
+    { label: 'Declared loss, spurious', value: fmt1(spuriousAll) + '%', foot: 'reordering, not real drops' },
+    { label: 'Mesh-dominant runs', value: `${meshDominant}<small> / ${RUNS.length}</small>`, foot: 'wins the fixed-PathId race' },
+    { label: 'Best mean goodput', value: fmt1(best.v) + '<small> Mbps</small>', foot: `${CC_LABEL[best.cc]}, all thresholds` },
+  ];
+  tiles.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'kpi';
+    el.innerHTML = `<div class="label">${t.label}</div><div class="value">${t.value}</div><div class="foot">${t.foot}</div>`;
+    mount.appendChild(el);
+  });
+}
+
+// ---------- shared: render a row of legend chips into a .chart-foot mount ----------
+function renderLegend(mount, items) {
+  mount.innerHTML = '';
+  items.forEach(({ label, color, note }) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `<span class="swatch" style="background:${resolveColor(color)}"></span>${label}` +
+      (note ? ` <span style="opacity:0.7">(${note})</span>` : '');
+    mount.appendChild(item);
+  });
+}
+
+// ---------- build goodput small multiples ----------
+function buildGoodputPanels() {
+  const mount = document.getElementById('goodput-panels');
+  CCS.forEach(cc => {
+    const wrap = document.createElement('div');
+    wrap.className = 'chart-card';
+    const series = seriesFor(cc, 'mbps');
+    const peak = series.reduce((a,b)=> b.mean>a.mean?b:a);
+    const head = document.createElement('div');
+    head.className = 'chart-card-head';
+    head.innerHTML = `<span class="ct"><span class="swatch" style="background:${resolveColor(CC_COLOR[cc])}"></span>${CC_LABEL[cc]}</span>` +
+      `<span class="stat">peak ${fmt1(peak.mean)} Mbps @ pt=${peak.pt}</span>`;
+    wrap.appendChild(head);
+    drawLineChart(wrap, { series, color: CC_COLOR[cc], band: CC_BAND[cc], unit: '', valueFmt: (v)=>fmt0(v) });
+    mount.appendChild(wrap);
+  });
+}
+function fmt0(v){ return Math.round(v); }
+
+// ---------- build genuine loss combined chart ----------
+function buildGenuineChart() {
+  const mount = document.getElementById('genuine-chart');
+  const seriesMap = {};
+  CCS.forEach(cc => seriesMap[cc] = seriesFor(cc, 'genuine_pct'));
+  drawMultiLine(mount, { seriesMap, unit: '%', valueFmt: (v)=>fmt1(v)+'%', height: 190 });
+  renderLegend(document.getElementById('genuine-legend'), CCS.map(cc => ({ label: CC_LABEL[cc], color: CC_COLOR[cc] })));
+}
+
+// ---------- declared vs genuine bar ----------
+function buildDeclaredChart() {
+  const mount = document.getElementById('declared-chart');
+  const groups = CCS.map(cc => {
+    const rows = RUNS.filter(r=>r.cc===cc);
+    return { label: CC_LABEL[cc], values: {
+      declared: mean(rows.map(r=>r.declared_pct)),
+      genuine: mean(rows.map(r=>r.genuine_pct)),
+    }};
+  });
+  drawGroupedBar(mount, {
+    groups, seriesNames: ['declared','genuine'],
+    seriesColors: ['var(--ink-muted)', 'var(--newreno)'],
+    seriesLabels: ['declared "lost"','genuine loss'],
+    valueFmt: (v)=>fmt1(v)+'%', height: 190,
+  });
+  renderLegend(document.getElementById('declared-legend'), [
+    { label: 'declared "lost"', color: 'var(--ink-muted)' },
+    { label: 'genuine loss', color: 'var(--newreno)' },
+  ]);
+}
+
+// ---------- path share stacked bar ----------
+function buildPathChart() {
+  const mount = document.getElementById('path-chart');
+  const groups = CCS.map(cc => {
+    const rows = RUNS.filter(r=>r.cc===cc);
+    return { label: CC_LABEL[cc], values: {
+      LEO: mean(rows.map(r=>r.a_share)),
+      Mobile: mean(rows.map(r=>r.b_share)),
+      Mesh: mean(rows.map(r=>r.c_share)),
+    }};
+  });
+  drawStackedBar(mount, { groups, segments: ['LEO','Mobile','Mesh'], segColors: ['var(--leo)','var(--mobile)','var(--mesh)'], height: 180 });
+  renderLegend(document.getElementById('path-legend'), [
+    { label: 'LEO', color: 'var(--leo)', note: '25ms, 0.17% loss' },
+    { label: 'Mobile', color: 'var(--mobile)', note: '50ms, 0.006% loss' },
+    { label: 'Mesh', color: 'var(--mesh)', note: '2ms, 0% loss' },
+  ]);
+}
+
+// ---------- sent-vs-genuine gap chart ----------
+function buildGapChart() {
+  const mount = document.getElementById('gap-chart');
+  const groups = CCS.map(cc => {
+    const rows = RUNS.filter(r=>r.cc===cc);
+    return { label: CC_LABEL[cc], values: {
+      gap: mean(rows.map(r=>r.gap_pct)),
+      genuine: mean(rows.map(r=>r.genuine_pct)),
+    }};
+  });
+  drawGroupedBar(mount, {
+    groups, seriesNames: ['gap','genuine'],
+    seriesColors: ['var(--ink-muted)', 'var(--newreno)'],
+    seriesLabels: ['sent&ndash;received gap','genuine loss'],
+    valueFmt: (v)=>fmt1(v)+'%', height: 190,
+  });
+  renderLegend(document.getElementById('gap-legend'), [
+    { label: 'sent–received gap', color: 'var(--ink-muted)' },
+    { label: 'genuine loss', color: 'var(--newreno)' },
+  ]);
+}
+
+// ---------- table ----------
+const COLS = [
+  { key: 'cc', label: 'CC', type: 'cc' },
+  { key: 'pt', label: 'pt', type: 'num' },
+  { key: 'rep', label: 'rep', type: 'num' },
+  { key: 'mbps', label: 'Mbps', type: 'num', fmt: fmt2 },
+  { key: 'sent_pkts', label: 'sent pkts', type: 'num', fmt: v=>v.toLocaleString() },
+  { key: 'declared_pct', label: 'declared%', type: 'num', fmt: fmt1 },
+  { key: 'spurious_pct', label: 'spurious%', type: 'num', fmt: fmt1 },
+  { key: 'genuine_pct', label: 'genuine%', type: 'num', fmt: fmt2 },
+  { key: 'gap_pct', label: 'gap%', type: 'num', fmt: fmt1 },
+  { key: 'a_share', label: 'LEO%', type: 'num', fmt: fmt1 },
+  { key: 'b_share', label: 'Mobile%', type: 'num', fmt: fmt1 },
+  { key: 'c_share', label: 'Mesh%', type: 'num', fmt: fmt1 },
+];
+let sortKey = 'mbps', sortDir = -1;
+let ccFilter = new Set(CCS);
+let ptFilter = 'all';
+
+function buildTableHead() {
+  const head = document.getElementById('table-head');
+  head.innerHTML = '';
+  COLS.forEach(c => {
+    const th = document.createElement('th');
+    th.textContent = c.label;
+    th.addEventListener('click', () => {
+      if (sortKey === c.key) sortDir *= -1; else { sortKey = c.key; sortDir = -1; }
+      renderTable();
+    });
+    head.appendChild(th);
+  });
+}
+
+function renderTable() {
+  const body = document.getElementById('table-body');
+  let rows = RUNS.filter(r => ccFilter.has(r.cc) && (ptFilter === 'all' || r.pt === ptFilter));
+  rows = rows.slice().sort((a,b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    return av < bv ? -1*sortDir : av > bv ? 1*sortDir : 0;
+  });
+  body.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    COLS.forEach(c => {
+      const td = document.createElement('td');
+      if (c.type === 'cc') {
+        td.innerHTML = `<span class="cc-pill"><span class="sw" style="background:${resolveColor(CC_COLOR[r.cc])}"></span>${CC_LABEL[r.cc]}</span>`;
+      } else {
+        td.textContent = c.fmt ? c.fmt(r[c.key]) : r[c.key];
+      }
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  document.querySelectorAll('#table-head th').forEach((th,i) => {
+    th.classList.toggle('sorted', COLS[i].key === sortKey);
+    th.innerHTML = COLS[i].label + (COLS[i].key === sortKey ? `<span class="arrow">${sortDir===1?'&#9650;':'&#9660;'}</span>` : '');
+  });
+  document.getElementById('table-caption').textContent = `${rows.length} of ${RUNS.length} runs shown`;
+}
+
+function buildFilters() {
+  document.querySelectorAll('.chip[data-cc]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cc = btn.dataset.cc;
+      if (ccFilter.has(cc)) { ccFilter.delete(cc); btn.setAttribute('aria-pressed','false'); }
+      else { ccFilter.add(cc); btn.setAttribute('aria-pressed','true'); }
+      renderTable();
+    });
+  });
+  const sel = document.getElementById('pt-filter');
+  PTS.forEach(pt => {
+    const opt = document.createElement('option');
+    opt.value = pt; opt.textContent = 'pt=' + pt;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', () => {
+    ptFilter = sel.value === 'all' ? 'all' : Number(sel.value);
+    renderTable();
+  });
+}
+
+// ---------- meta ----------
+document.getElementById('run-count-meta').textContent = `${RUNS.length} runs · generated ${new Date(DATA.generated_at).toLocaleString()}`;
+document.getElementById('freshness').textContent = `snapshot from logs/ as of ${new Date(DATA.generated_at).toLocaleDateString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}`;
+
+buildKpis();
+buildGoodputPanels();
+buildGenuineChart();
+buildDeclaredChart();
+buildPathChart();
+buildGapChart();
+buildTableHead();
+buildFilters();
+renderTable();
+</script>

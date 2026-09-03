@@ -275,13 +275,15 @@ def run_automated_sweep(client, server, mode="stream"):
     if not use_direct_bin:
         if not os.path.isfile(n0q_manifest):
             error(f"\n[ERROR] n0q Cargo.toml not found at: {n0q_manifest}\n")
-            error("Please run ./scripts/setup-node.sh to install Rust and clone/build n0q, or make sure the n0q repo is located at ../n0q\n\n")
+            error("Please clone n0q into ../n0q (relative to this repo) and build it:\n")
+            error("  git clone https://github.com/ekstrah/n0q-fork ../n0q\n")
+            error("  cd ../n0q && cargo build --release --bin n0q-server --bin n0q-client\n\n")
             return
 
         cargo_check = server.cmd(f"bash -c \"{cargo_env_path} command -v cargo\"").strip()
         if not cargo_check:
             error("\n[ERROR] Rust 'cargo' command not found in PATH or ~/.cargo/bin!\n")
-            error("Please install Rust via 'curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y' or run ./scripts/setup-node.sh\n\n")
+            error("Please install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y\n\n")
             return
 
     logs_dir = os.path.join(repo_dir, "logs")

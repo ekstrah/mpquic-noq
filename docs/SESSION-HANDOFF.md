@@ -214,11 +214,10 @@ kind of silent collision once).
 - `scripts/analyze-spurious-loss.py` — earlier, simpler version (single-run,
   no repeat support) — superseded by analyze-threshold-sweep.py but still
   works for quick one-off checks
-- `scripts/threshold_sweep_master.csv` — the 72-point stream-mode
-  packet_threshold dataset (merged from two sweeps after a mid-session
-  `logs/` loss, reconstructed from conversation transcript — see TODO.md for
-  the story)
-- `scripts/threshold_sweep_analysis_datagram.csv` /
-  `scripts/threshold_sweep_analysis_stream.csv` — the 24-run MINRTT-only
-  validation-sweep datasets (2026-09-01), post-fix for datagram mode (see
-  finding #5)
+- `scripts/threshold_sweep_analysis_datagram.csv` — the datagram-mode
+  packet_threshold sweep dataset (120-run full sweep, done and analyzed as
+  of 2026-09-03; see TODO.md for the run history and earlier smaller
+  datasets that fed into it, since superseded and removed from the repo)
+- `viewer/index.html` — self-contained HTML dashboard for the datagram
+  sweep results (local copy of a dashboard also published as a Claude
+  artifact)
